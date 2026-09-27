@@ -1,0 +1,315 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=23mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype}
+\usepackage{amsmath,amssymb,booktabs,longtable,array,tabularx,xcolor,fancyhdr}
+\usepackage[hidelinks]{hyperref}
+\numberwithin{equation}{section}
+\pagestyle{fancy}\fancyhf{}
+\lhead{Long-Only Capacity Methodology}
+\rhead{Revised 27 September 2026}
+\cfoot{\thepage}\setlength{\headheight}{14pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\title{\textbf{Long-Only Equity Capacity Methodology}\\[0.4em]
+\large Distributional Liquidity Migration, Execution Horizons and Alpha Decay}
+\author{Rodrigo Dupleich\thanks{with the help of ChatGTP}}
+\date{27 September 2026}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This document defines the stable methodology for estimating the capacity of a long-only equity
+strategy. It separates the methodology from portfolio-specific runs. Each run should produce a
+separate report containing the supplied inputs, fitted parameters, diagnostics, scenarios,
+thresholds and warnings. Appendices A--C define the user input contract and distinguish supplied,
+policy and fitted parameters.
+\end{abstract}
+\tableofcontents
+\clearpage
+
+\section{Framework overview}
+The framework maps assets under management (AUM) into a distribution of parent-order
+participation, execution horizons, implementation costs and captured alpha:
+\begin{equation}\label{eq:flow}
+ A\rightarrow F_A(p)\rightarrow D(p)\rightarrow
+ \{\bar c(A),R_g(A)\}\rightarrow R_{\mathrm{net}}(A),IR_{\mathrm{net}}(A).
+\end{equation}
+Turnover $T$ is one-way annual turnover, so executed purchases and sales are approximated by
+$2TA$. Cost is expressed in basis points per executed notional.
+
+The model consumes either aggregate ADV buckets or, preferably, parent-order data. Aggregate
+bucket shares are interpreted as shares of executed notional, not trade-count frequencies.
+
+\section{Strategy economics}
+At current AUM $A_0$, the key quantities are gross relative return $R_g$, tracking error $TE$,
+turnover $T$ and average holdings $N$:
+\begin{equation}\label{eq:economics}
+ IR_g=\frac{R_g}{TE},\qquad
+ \alpha_{\mathrm{holding}}=\frac{R_g}{N},\qquad
+ \alpha_{\mathrm{cycle}}=\frac{R_g}{T},\qquad
+ H\approx\frac{1}{T}.
+\end{equation}
+Current gross alpha is treated as already reflecting the current implementation schedule. Alpha
+decay at alternative AUM levels is therefore measured relative to the current schedule.
+
+\section{Distributional liquidity migration}\label{sec:migration}
+Capacity depends on parent-order participation $p=Q/\mathrm{ADV}$, not ADV in isolation. Modelling
+ADV alone would require a joint model for parent-order size and its dependence on ADV.
+
+The aggregate implementation fits a Burr XII distribution:
+\begin{equation}\label{eq:burr}
+ F(p;c,d,\lambda)=1-\left[1+\left(\frac{p}{\lambda}\right)^c\right]^{-d}.
+\end{equation}
+It offers a flexible body and Pareto-like survival tail $1-F(p)\sim p^{-cd}$. Empirical work finds
+power-law tails in trade-size distributions \cite{rak2007}. The calibration constrains $cd\geq
+1.25$, preserving a heavy tail while ensuring finite mean participation.
+
+The distribution changes with AUM through
+\begin{equation}\label{eq:scaling}
+ \lambda(A)=\lambda_0\left(\frac{A}{A_0}\right)^\eta,
+ \qquad
+ d(A)=d_0\left(\frac{A}{A_0}\right)^{-\kappa}.
+\end{equation}
+The scale elasticity $\eta$ captures how participation grows with AUM. Tail drift $\kappa$ is
+reserved for structural changes in liquidity composition. Bucket shares follow smoothly from
+\begin{equation}\label{eq:weights}
+ w_i(A)=F_A(u_i)-F_A(\ell_i).
+\end{equation}
+
+
+The participation distribution enters the capacity calculation through its quantile representation.
+The distribution is weighted by executed notional: each equal-width quantile interval represents an equal fraction of
+traded value, not an equal number of trades. At each AUM, set
+$F_A(p)=F(p;c,d(A),\lambda(A))$. Its inverse turns a fixed rank $q\in(0,1)$ into participation:
+\begin{equation}\label{eq:quantile}
+ p_A(q)=F_A^{-1}(q)
+ =\lambda(A)\left[(1-q)^{-1/d(A)}-1\right]^{1/c}.
+\end{equation}
+The same rank is used at current and alternative AUM. This is a rank-preserving scenario
+assumption, not an observation that the same individual orders recur. It supplies the paired
+participations needed for the horizon ratio in equation~\eqref{eq:effective}. When $\kappa=0$,
+$p_A(q)=p_{A_0}(q)(A/A_0)^\eta$; with tail drift, the full inverse in
+equation~\eqref{eq:quantile} is required.
+
+Bucket weights in equation~\eqref{eq:weights} summarize this distribution for charts. The
+continuous model does not multiply them into its costs a second time: the notional weights
+are already represented by the quantile average made explicit in Section~\ref{sec:net}.
+
+\section{Impact model}
+Expected and realised costs are fitted separately using
+\begin{equation}\label{eq:impact}
+ c(p)=a+bp^\gamma,
+\end{equation}
+subject to positive parameter bounds. Square-root impact is an important benchmark, while the
+implementation permits the exponent to be fitted \cite{farmer2011}. At current AUM, the continuous
+distributional expectation is calibrated back to the observed notional-weighted bucket cost.
+
+\section{Execution horizon}
+For target daily participation $\rho$ and maximum horizon $D_{\max}$,
+\begin{equation}\label{eq:days}
+ D(p)=\min\!\left(D_{\max},\max\!\left(1,
+ \left\lceil\frac{p}{\rho}\right\rceil\right)\right).
+\end{equation}
+Current costs already embed the current schedule, so counterfactual effective participation is
+\begin{equation}\label{eq:effective}
+ p_{\mathrm{eff},j}(A)=p_j(A)\frac{D_j(A_0)}{D_j(A)}.
+\end{equation}
+The rule exposes the cost-versus-delay trade-off studied in optimal execution
+\cite{almgren2001}. A production version can replace it with direct optimisation.
+
+\section{Alpha decay}
+Let $H_\alpha$ be signal half-life in trading days and $\delta=\log(2)/H_\alpha$. For equal daily
+slices over $D$ days, average alpha capture is
+\begin{equation}\label{eq:capture}
+ g(D,H_\alpha)=\frac{1}{D}\sum_{t=0}^{D-1}e^{-\delta t}
+ =\frac{1-e^{-\delta D}}{D(1-e^{-\delta})}.
+\end{equation}
+Normalising to current implementation gives
+\begin{equation}\label{eq:gross}
+ R_g(A)=R_g(A_0)\,
+ \mathbb{E}\left[\frac{g(D_j(A),H_{\alpha,j})}
+ {g(D_j(A_0),H_{\alpha,j})}\right].
+\end{equation}
+Aggregate runs currently weight alpha by executed notional. Trade-level runs should weight by each
+order's forecast alpha contribution. Predictors with different mean-reversion speeds imply
+different desired trading speeds \cite{garleanu2013}.
+
+\section{Net capacity}\label{sec:net}
+The participation distribution specified in Section~\ref{sec:migration} determines $p_A(q)$
+through equations~\eqref{eq:burr}, \eqref{eq:scaling} and \eqref{eq:quantile}.
+For each notional rank $q$, the execution rule in equation~\eqref{eq:days} is evaluated
+at current and alternative AUM:
+\begin{equation}\label{eq:paired}
+ \begin{aligned}
+ D_A(q)&=D\!\left(p_A(q)\right),\qquad D_0(q)=D\!\left(p_{A_0}(q)\right),\\
+ p_{\mathrm{eff},A}(q)&=p_A(q)\frac{D_0(q)}{D_A(q)}.
+ \end{aligned}
+\end{equation}
+Thus distributional migration has two channels: it changes effective participation and
+therefore impact, and it changes execution days and therefore alpha capture.
+
+Let $\bar c_{\mathrm{obs},0}=\sum_i w_{i,0}^{\mathrm{obs}}c_i^{\mathrm{obs}}$ be the observed
+current notional-weighted cost in basis points. The impact function $c(p)$ in
+equation~\eqref{eq:impact} is the raw fitted curve. Its baseline calibration multiplier is
+\begin{equation}\label{eq:calibration}
+ K=\frac{\bar c_{\mathrm{obs},0}}
+ {\displaystyle\int_0^1 c\!\left(p_{A_0}(q)\right)\,dq}.
+\end{equation}
+Expected and realised curves each use their own multiplier. Making the expectation explicit,
+the expected cost and captured gross alpha are
+\begin{equation}\label{eq:costexpectation}
+ \bar c(A)=K\int_0^1 c\!\left(p_{\mathrm{eff},A}(q)\right)\,dq,
+\end{equation}
+\begin{equation}\label{eq:alphaexpectation}
+ R_g(A)=R_g(A_0)\int_0^1
+ \frac{g(D_A(q),H_\alpha)}{g(D_0(q),H_\alpha)}\,dq.
+\end{equation}
+Here $g$ is equation~\eqref{eq:capture}, and a common half-life is used for the aggregate
+model. These integrals are the notional-weighted expectations previously written as
+$\mathbb E[\cdot]$. Integrating over uniform ranks is equivalent to integrating over the
+participation distribution supplied by Section 3, with current and alternative horizons
+paired at the same rank.
+
+The expectations are evaluated numerically using $J$ equally weighted midpoint quantiles:
+\begin{equation}\label{eq:quadrature}
+ \begin{aligned}
+ q_j&=\frac{j-\tfrac12}{J},\quad j=1,\ldots,J,\qquad
+ K_J=\frac{\bar c_{\mathrm{obs},0}}
+ {J^{-1}\sum_{j=1}^{J}c(p_{A_0}(q_j))},\\
+ \bar c_J(A)&=\frac{K_J}{J}\sum_{j=1}^{J}c(p_{\mathrm{eff},A}(q_j)),\\
+ R_{g,J}(A)&=\frac{R_g(A_0)}{J}\sum_{j=1}^{J}
+ \frac{g(D_A(q_j),H_\alpha)}{g(D_0(q_j),H_\alpha)}.
+ \end{aligned}
+\end{equation}
+The factor $1/J$ supplies the notional weight. There is no additional bucket-share multiplier.
+Using the same numerical grid in the calibration denominator and cost average ensures
+$\bar c_J(A_0)=\bar c_{\mathrm{obs},0}$ and $R_{g,J}(A_0)=R_g(A_0)$.
+The continuous impact expectation requires $c\,d(A)>\gamma$ for the Burr tail; the finite-mean
+participation constraint alone does not guarantee this for every fitted exponent or AUM.
+Finite-grid runs should check sensitivity to $J$, particularly under tail thickening.
+
+The resulting impact estimate is converted from cost per executed notional into annual
+cost per unit of portfolio capital using one-way turnover:
+\begin{equation}\label{eq:drag}
+ C(A)=\frac{2T\bar c(A)}{10{,}000}.
+\end{equation}
+The conversion by $10{,}000$ changes basis points into a decimal return. Net alpha and IR are
+\begin{equation}\label{eq:net}
+ R_{\mathrm{net}}(A)=R_g(A)-C(A),\qquad
+ IR_{\mathrm{net}}(A)=\frac{R_{\mathrm{net}}(A)}{TE}.
+\end{equation}
+The quantities $R_g$, $C$ and $TE$ are expressed as decimal annual returns, and $T$ as
+decimal one-way turnover. Distributional migration therefore affects both components of
+net return: impact in $C(A)$ and delay in $R_g(A)$. Tracking error and turnover remain fixed assumptions
+in this specification.
+
+For example, consider a notional rank whose participation increases from 8\% to 16\% ADV. With a 10\% daily
+target and a non-binding horizon cap, its horizon increases from one to two days.
+Effective participation becomes $16\%\times1/2=8\%$, so its modeled impact is unchanged,
+while its alpha-capture ratio becomes $g(2,H_\alpha)/g(1,H_\alpha)<1$.
+Migration can therefore lower net IR through delay even when scheduling offsets the impact
+increase. This is an illustrative rank, not a claim about the entire portfolio.
+
+A run report should show the complete capacity curve and explicitly selected thresholds rather
+than presenting a single universal capacity number.
+
+\section{Required run-report contents}
+Every portfolio run report must include:
+\begin{enumerate}
+  \item run identity, timestamp, code version and input source;
+  \item supplied strategy, liquidity, execution and alpha-decay inputs;
+  \item fitted distribution and impact parameters with fit diagnostics;
+  \item current-AUM reconciliation to observed costs and alpha;
+  \item AUM scenario table and continuous capacity curves;
+  \item bucket migration and execution-horizon diagnostics;
+  \item selected capacity thresholds and exact crossing estimates;
+  \item data-quality, extrapolation and model-risk warnings.
+\end{enumerate}
+
+\section{Validation requirements}
+A valid run should confirm that notional shares sum to one, AUM and half-life are positive,
+participation buckets are ordered and non-overlapping, expected and realised costs share a common
+benchmark, and current-AUM impact reconciles to the supplied weighted cost. The report should flag
+missing trade-level alpha weights, large extrapolations, horizons at $D_{\max}$, unstable tail fits
+and sensitivity to user policy parameters.
+
+\appendix
+\section{User-supplied data inputs}
+\small
+\begin{longtable}{@{}p{0.23\textwidth}p{0.16\textwidth}p{0.18\textwidth}p{0.35\textwidth}@{}}
+\caption{Required and optional user data}\label{tab:userinputs}\\
+\toprule
+Input & Requirement & Unit / format & Definition and validation\\
+\midrule
+\endfirsthead
+\toprule
+Input & Requirement & Unit / format & Definition and validation\\
+\midrule
+\endhead
+Current AUM $A_0$ & Required & Currency bn & Average deployed AUM represented by the liquidity sample; must be positive.\\
+Gross expected alpha $R_g$ & Required & Decimal p.a. & Expected relative return before modeled impact; document whether existing live slippage is embedded.\\
+Tracking error $TE$ & Required & Decimal p.a. & Annualised ex-ante or realised relative volatility; must be positive and methodologically aligned with alpha.\\
+One-way turnover $T$ & Required & Decimal p.a. & Purchases or sales divided by average AUM. Do not supply two-way turnover without changing the convention.\\
+Average holdings $N$ & Diagnostic & Count & Average number of portfolio positions over the measurement period.\\
+Bucket lower and upper bounds & Required for aggregate run & Fraction of ADV & Ordered, non-overlapping participation intervals covering the full positive range.\\
+Executed-notional share & Required for aggregate run & Fraction summing to 1 & Annual executed-notional mass in each bucket; not trade-count frequency.\\
+Representative participation & Required for impact fit & Fraction of ADV & Prefer the notional-weighted mean participation within each bucket.\\
+Expected impact & Required & bp / executed notional & Expected implementation cost using a consistent arrival-price or other declared benchmark.\\
+Realised impact & Recommended & bp / executed notional & Realised cost using the same benchmark as expected impact.\\
+Parent-order notional or shares & Required for trade-level run & Currency / shares & Parent order before child-order slicing, net of cancellations according to a declared convention.\\
+Security ADV & Required for trade-level run & Currency or shares/day & ADV measured consistently with order units, including declared lookback and lag.\\
+Order timestamps & Recommended & Datetime & Decision, release, first fill and final fill times.\\
+Actual execution horizon & Recommended & Trading days & Number of sessions over which the parent order was worked.\\
+Forecast alpha & Recommended & bp or return & Expected contribution at the order decision timestamp.\\
+Signal family & Recommended & Category & Used to assign or estimate signal-specific decay.\\
+Observed alpha path & Preferred & Return by horizon & Forward alpha after 1, 2, 3, 5, 10 or more trading days for empirical half-life estimation.\\
+Side, spread and volatility & Recommended & Category / bp / decimal & Used for richer asymmetric impact and execution-risk models.\\
+\bottomrule
+\end{longtable}
+
+\section{User-set policy and scenario parameters}
+\begin{longtable}{@{}p{0.25\textwidth}p{0.14\textwidth}p{0.17\textwidth}p{0.36\textwidth}@{}}
+\caption{Parameters chosen or approved by the user}\label{tab:policy}\\
+\toprule
+Parameter & Example & Unit & Interpretation\\
+\midrule
+\endfirsthead
+\toprule
+Parameter & Example & Unit & Interpretation\\
+\midrule
+\endhead
+Participation-scale elasticity $\eta$ & 0.85 & Elasticity & Response of the Burr scale to AUM. Set to 1 for proportional scaling; estimate from portfolio rescaling where possible.\\
+Tail-thickening elasticity $\kappa$ & 0.00 & Elasticity & Structural change in upper-tail liquidity composition. Keep at zero unless supported by portfolio simulations or observations.\\
+Target daily participation $\rho$ & 10\% & ADV/day & Execution-policy target used to determine horizon.\\
+Maximum execution horizon $D_{\max}$ & 10 & Trading days & Maximum permitted horizon before daily participation exceeds the target.\\
+Alpha half-life $H_\alpha$ & 10 & Trading days & Time for forecast alpha to halve. Prefer signal-specific empirical estimates.\\
+AUM scenario grid & 1--100 & Currency bn & Range over which curves and thresholds are evaluated.\\
+Net IR threshold & 0.75 & Ratio & Minimum acceptable net information ratio.\\
+Alpha-retention threshold & 80\% & Percentage & Minimum fraction of current gross alpha remaining after delay and impact.\\
+Impact-drag threshold & 100 & bp p.a. & Maximum acceptable annual return drag.\\
+Alpha-capture threshold & 95\% & Percentage & Minimum gross alpha retained after execution delay, before impact.\\
+\bottomrule
+\end{longtable}
+
+\section{Fitted parameters and outputs}
+The user does not normally supply Burr parameters $(c,d,\lambda_0)$ or impact parameters
+$(a,b,\gamma)$; the model estimates them. Every run report should disclose them along with the tail
+index $cd$, bucket-fit residuals, impact-fit residuals, baseline calibration multiplier, threshold
+crossings and warnings. Parameters should be versioned with their input sample and estimation date.
+\normalsize
+
+\begin{thebibliography}{9}\small
+\bibitem{rak2007} R. Rak et al. ``Tests of scaling and universality of the distributions of trade
+size and share volume.'' \emph{Physical Review E} 76, 046109 (2007).
+\href{https://doi.org/10.1103/PhysRevE.76.046109}{doi:10.1103/PhysRevE.76.046109}.
+\bibitem{farmer2011} J. D. Farmer et al. ``How efficiency shapes market impact.''
+\emph{Quantitative Finance} 13(11), 1743--1758 (2013).
+\href{https://arxiv.org/abs/1102.5457}{arXiv:1102.5457}.
+\bibitem{almgren2001} R. Almgren and N. Chriss. ``Optimal Execution of Portfolio Transactions.''
+\emph{Journal of Risk} 3, 5--39 (2001).
+\href{https://doi.org/10.21314/JOR.2001.041}{doi:10.21314/JOR.2001.041}.
+\bibitem{garleanu2013} N. G\^{a}rleanu and L. H. Pedersen. ``Dynamic Trading with Predictable
+Returns and Transaction Costs.'' \emph{Journal of Finance} 68(6), 2309--2340 (2013).
+\end{thebibliography}
+\end{document}

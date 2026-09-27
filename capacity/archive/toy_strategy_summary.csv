@@ -1,0 +1,13 @@
+Metric,Value,Unit
+Gross relative return,4.0,% p.a.
+Tracking error,4.0,% p.a.
+One-way turnover,80.0,% p.a.
+Average holdings,100.0,count
+Alpha per holding slot,4.0,bp p.a.
+Portfolio contribution/replacement,5.0,bp
+Alpha per unit capital recycled,5.0,% per cycle
+Approx. average holding period,1.25,years
+Participation scale elasticity,0.85,x
+Tail-thickening elasticity,0.0,x
+Target daily participation,10.0,% ADV
+Alpha half-life,10.0,trading days

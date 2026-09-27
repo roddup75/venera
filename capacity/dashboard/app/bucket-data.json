@@ -1,0 +1,79 @@
+{
+  "source": "buckets_data_live.csv",
+  "buckets": [
+    {
+      "label": "0\u20131%",
+      "lower": 0.0,
+      "upper": 0.01,
+      "p": 0.005,
+      "share": 28.91,
+      "cost": 1.09,
+      "realised": 1.02,
+      "trades": 801.0,
+      "valueUsdMillion": 273.014
+    },
+    {
+      "label": "1\u20135%",
+      "lower": 0.01,
+      "upper": 0.05,
+      "p": 0.030000000000000002,
+      "share": 26.01,
+      "cost": 5.71,
+      "realised": 5.34,
+      "trades": 113.0,
+      "valueUsdMillion": 245.649
+    },
+    {
+      "label": "5\u201310%",
+      "lower": 0.05,
+      "upper": 0.1,
+      "p": 0.07500000000000001,
+      "share": 17.98,
+      "cost": 10.88,
+      "realised": 13.22,
+      "trades": 33.0,
+      "valueUsdMillion": 169.804
+    },
+    {
+      "label": "10\u201325%",
+      "lower": 0.1,
+      "upper": 0.25,
+      "p": 0.175,
+      "share": 16.58,
+      "cost": 15.52,
+      "realised": 12.96,
+      "trades": 18.0,
+      "valueUsdMillion": 156.564
+    },
+    {
+      "label": "25\u201350%",
+      "lower": 0.25,
+      "upper": 0.5,
+      "p": 0.375,
+      "share": 9.18,
+      "cost": 22.45,
+      "realised": 21.46,
+      "trades": 5.0,
+      "valueUsdMillion": 86.744
+    },
+    {
+      "label": "50\u2013100%",
+      "lower": 0.5,
+      "upper": 1.0,
+      "p": 0.75,
+      "share": 1.34,
+      "cost": 22.48,
+      "realised": 5.46,
+      "trades": 1.0,
+      "valueUsdMillion": 12.7
+    }
+  ],
+  "calibration": {
+    "burrC": 0.6239694030174775,
+    "burrD": 23.557770716612147,
+    "burrScale": 9.999999999999616,
+    "impactA": 4.438851356522155e-17,
+    "impactB": 28.027885682737395,
+    "impactGamma": 0.3858429401401356
+  }
+}

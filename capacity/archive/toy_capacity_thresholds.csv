@@ -1,0 +1,5 @@
+Threshold,AUM_bn
+AUM where net IR <= 0.75,45.624673161668824
+AUM where alpha retained <= 80%,34.28814820415013
+AUM where annual impact drag >= 100 bp,71.07623575306565
+AUM where alpha capture <= 95%,23.50884587412998
