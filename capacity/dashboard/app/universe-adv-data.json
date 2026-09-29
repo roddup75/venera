@@ -1,0 +1,19 @@
+{
+  "currency": "USD",
+  "lookbackYears": 1,
+  "universeSize": 203,
+  "minimumAdvUsd": 20000,
+  "quantiles": [
+    { "percentile": 0, "advUsd": 20000 },
+    { "percentile": 10, "advUsd": 50000 },
+    { "percentile": 20, "advUsd": 130000 },
+    { "percentile": 30, "advUsd": 800000 },
+    { "percentile": 40, "advUsd": 1000000 },
+    { "percentile": 50, "advUsd": 1420000 },
+    { "percentile": 60, "advUsd": 2000000 },
+    { "percentile": 70, "advUsd": 4000000 },
+    { "percentile": 80, "advUsd": 6000000 },
+    { "percentile": 90, "advUsd": 50000000 },
+    { "percentile": 100, "advUsd": 200000000 }
+  ]
+}

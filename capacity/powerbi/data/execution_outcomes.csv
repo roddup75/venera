@@ -1,0 +1,601 @@
+Model,AUM_USD_bn,Outcome_order,Execution_outcome,Parent_orders_pct
+ADV calibrated,0.1,1,Completed in 1 day,100
+ADV calibrated,0.1,2,Completed in 2–5 days,0
+ADV calibrated,0.1,3,Completed in 6+ days,0
+ADV calibrated,0.1,4,Beyond maximum horizon,0
+ADV calibrated,0.2,1,Completed in 1 day,100
+ADV calibrated,0.2,2,Completed in 2–5 days,0
+ADV calibrated,0.2,3,Completed in 6+ days,0
+ADV calibrated,0.2,4,Beyond maximum horizon,0
+ADV calibrated,0.3,1,Completed in 1 day,100
+ADV calibrated,0.3,2,Completed in 2–5 days,0
+ADV calibrated,0.3,3,Completed in 6+ days,0
+ADV calibrated,0.3,4,Beyond maximum horizon,0
+ADV calibrated,0.4,1,Completed in 1 day,99.96517400326236
+ADV calibrated,0.4,2,Completed in 2–5 days,0.034825996737634896
+ADV calibrated,0.4,3,Completed in 6+ days,0
+ADV calibrated,0.4,4,Beyond maximum horizon,0
+ADV calibrated,0.5,1,Completed in 1 day,99.93261673855926
+ADV calibrated,0.5,2,Completed in 2–5 days,0.06738326144073217
+ADV calibrated,0.5,3,Completed in 6+ days,0
+ADV calibrated,0.5,4,Beyond maximum horizon,0
+ADV calibrated,0.6,1,Completed in 1 day,99.90842338449005
+ADV calibrated,0.6,2,Completed in 2–5 days,0.09157661550996382
+ADV calibrated,0.6,3,Completed in 6+ days,0
+ADV calibrated,0.6,4,Beyond maximum horizon,0
+ADV calibrated,0.7,1,Completed in 1 day,99.8613423462706
+ADV calibrated,0.7,2,Completed in 2–5 days,0.13865765372938343
+ADV calibrated,0.7,3,Completed in 6+ days,0
+ADV calibrated,0.7,4,Beyond maximum horizon,0
+ADV calibrated,0.8,1,Completed in 1 day,99.72288840890054
+ADV calibrated,0.8,2,Completed in 2–5 days,0.2771115910994564
+ADV calibrated,0.8,3,Completed in 6+ days,0
+ADV calibrated,0.8,4,Beyond maximum horizon,0
+ADV calibrated,0.9,1,Completed in 1 day,99.62375839082976
+ADV calibrated,0.9,2,Completed in 2–5 days,0.3762416091702306
+ADV calibrated,0.9,3,Completed in 6+ days,0
+ADV calibrated,0.9,4,Beyond maximum horizon,0
+ADV calibrated,1,1,Completed in 1 day,99.56008731324773
+ADV calibrated,1,2,Completed in 2–5 days,0.4399126867522683
+ADV calibrated,1,3,Completed in 6+ days,0
+ADV calibrated,1,4,Beyond maximum horizon,0
+ADV calibrated,1.1,1,Completed in 1 day,99.49848306421754
+ADV calibrated,1.1,2,Completed in 2–5 days,0.5015169357824569
+ADV calibrated,1.1,3,Completed in 6+ days,0
+ADV calibrated,1.1,4,Beyond maximum horizon,0
+ADV calibrated,1.2,1,Completed in 1 day,99.43908827732687
+ADV calibrated,1.2,2,Completed in 2–5 days,0.5609117226731195
+ADV calibrated,1.2,3,Completed in 6+ days,0
+ADV calibrated,1.2,4,Beyond maximum horizon,0
+ADV calibrated,1.3,1,Completed in 1 day,99.41027314858341
+ADV calibrated,1.3,2,Completed in 2–5 days,0.589726851416581
+ADV calibrated,1.3,3,Completed in 6+ days,0
+ADV calibrated,1.3,4,Beyond maximum horizon,0
+ADV calibrated,1.4,1,Completed in 1 day,99.24962181994454
+ADV calibrated,1.4,2,Completed in 2–5 days,0.7503781800554759
+ADV calibrated,1.4,3,Completed in 6+ days,0
+ADV calibrated,1.4,4,Beyond maximum horizon,0
+ADV calibrated,1.5,1,Completed in 1 day,99.11906862184996
+ADV calibrated,1.5,2,Completed in 2–5 days,0.8809313781500486
+ADV calibrated,1.5,3,Completed in 6+ days,0
+ADV calibrated,1.5,4,Beyond maximum horizon,0
+ADV calibrated,1.6,1,Completed in 1 day,98.86387140958679
+ADV calibrated,1.6,2,Completed in 2–5 days,1.1361285904131935
+ADV calibrated,1.6,3,Completed in 6+ days,0
+ADV calibrated,1.6,4,Beyond maximum horizon,0
+ADV calibrated,1.7,1,Completed in 1 day,98.73933366220524
+ADV calibrated,1.7,2,Completed in 2–5 days,1.2606663377947582
+ADV calibrated,1.7,3,Completed in 6+ days,0
+ADV calibrated,1.7,4,Beyond maximum horizon,0
+ADV calibrated,1.8,1,Completed in 1 day,98.49668100086873
+ADV calibrated,1.8,2,Completed in 2–5 days,1.4891347613241435
+ADV calibrated,1.8,3,Completed in 6+ days,0.014184237807122694
+ADV calibrated,1.8,4,Beyond maximum horizon,0
+ADV calibrated,1.9,1,Completed in 1 day,98.37870409677257
+ADV calibrated,1.9,2,Completed in 2–5 days,1.6001443136724351
+ADV calibrated,1.9,3,Completed in 6+ days,0.021151589555004596
+ADV calibrated,1.9,4,Beyond maximum horizon,0
+ADV calibrated,2,1,Completed in 1 day,98.26306437252553
+ADV calibrated,2,2,Completed in 2–5 days,1.702109630736826
+ADV calibrated,2,3,Completed in 6+ days,0.034825996737634986
+ADV calibrated,2,4,Beyond maximum horizon,0
+ADV calibrated,2.1,1,Completed in 1 day,98.26306437252553
+ADV calibrated,2.1,2,Completed in 2–5 days,1.6954071204104402
+ADV calibrated,2.1,3,Completed in 6+ days,0.04152850706402247
+ADV calibrated,2.1,4,Beyond maximum horizon,0
+ADV calibrated,2.2,1,Completed in 1 day,98.14985126800597
+ADV calibrated,2.2,2,Completed in 2–5 days,1.8020106868037191
+ADV calibrated,2.2,3,Completed in 6+ days,0.04813804519030114
+ADV calibrated,2.2,4,Beyond maximum horizon,0
+ADV calibrated,2.3,1,Completed in 1 day,98.03916542378613
+ADV calibrated,2.3,2,Completed in 2–5 days,1.9061824677175416
+ADV calibrated,2.3,3,Completed in 6+ days,0.05465210849634386
+ADV calibrated,2.3,4,Beyond maximum horizon,0
+ADV calibrated,2.4,1,Completed in 1 day,97.93112107884998
+ADV calibrated,2.4,2,Completed in 2–5 days,2.0078108325698607
+ADV calibrated,2.4,3,Completed in 6+ days,0.06106808858016335
+ADV calibrated,2.4,4,Beyond maximum horizon,0
+ADV calibrated,2.5,1,Completed in 1 day,97.93112107884997
+ADV calibrated,2.5,2,Completed in 2–5 days,2.0014956597092928
+ADV calibrated,2.5,3,Completed in 6+ days,0.06738326144073226
+ADV calibrated,2.5,4,Beyond maximum horizon,0
+ADV calibrated,2.6,1,Completed in 1 day,97.8258491545143
+ADV calibrated,2.6,2,Completed in 2–5 days,2.100556069798311
+ADV calibrated,2.6,3,Completed in 6+ days,0.0735947756873904
+ADV calibrated,2.6,4,Beyond maximum horizon,0
+ADV calibrated,2.7,1,Completed in 1 day,97.8258491545143
+ADV calibrated,2.7,2,Completed in 2–5 days,2.0944512073076194
+ADV calibrated,2.7,3,Completed in 6+ days,0.07969963817808245
+ADV calibrated,2.7,4,Beyond maximum horizon,0
+ADV calibrated,2.8,1,Completed in 1 day,97.7235012725994
+ADV calibrated,2.8,2,Completed in 2–5 days,2.1908040311350745
+ADV calibrated,2.8,3,Completed in 6+ days,0.08569469626551876
+ADV calibrated,2.8,4,Beyond maximum horizon,0
+ADV calibrated,2.9,1,Completed in 1 day,97.7235012725994
+ADV calibrated,2.9,2,Completed in 2–5 days,2.1908040311350745
+ADV calibrated,2.9,3,Completed in 6+ days,0.08569469626551876
+ADV calibrated,2.9,4,Beyond maximum horizon,0
+ADV calibrated,3,1,Completed in 1 day,97.62425506684818
+ADV calibrated,3,2,Completed in 2–5 days,2.2841683176418672
+ADV calibrated,3,3,Completed in 6+ days,0.09157661550996399
+ADV calibrated,3,4,Beyond maximum horizon,0
+ADV calibrated,3.1,1,Completed in 1 day,97.62425506684818
+ADV calibrated,3.1,2,Completed in 2–5 days,2.2841683176418672
+ADV calibrated,3.1,3,Completed in 6+ days,0.09157661550996399
+ADV calibrated,3.1,4,Beyond maximum horizon,0
+ADV calibrated,3.2,1,Completed in 1 day,97.62425506684816
+ADV calibrated,3.2,2,Completed in 2–5 days,2.2784030819009096
+ADV calibrated,3.2,3,Completed in 6+ days,0.0973418512509202
+ADV calibrated,3.2,4,Beyond maximum horizon,0
+ADV calibrated,3.3,1,Completed in 1 day,97.52832131822863
+ADV calibrated,3.3,2,Completed in 2–5 days,2.368692070030896
+ADV calibrated,3.3,3,Completed in 6+ days,0.10298661174047394
+ADV calibrated,3.3,4,Beyond maximum horizon,0
+ADV calibrated,3.4,1,Completed in 1 day,97.52832131822863
+ADV calibrated,3.4,2,Completed in 2–5 days,2.368692070030896
+ADV calibrated,3.4,3,Completed in 6+ days,0.10298661174047394
+ADV calibrated,3.4,4,Beyond maximum horizon,0
+ADV calibrated,3.5,1,Completed in 1 day,97.28378172266494
+ADV calibrated,3.5,2,Completed in 2–5 days,2.5775606236056814
+ADV calibrated,3.5,3,Completed in 6+ days,0.13152463818367363
+ADV calibrated,3.5,4,Beyond maximum horizon,0.00713301554571004
+ADV calibrated,3.6,1,Completed in 1 day,97.0431611829287
+ADV calibrated,3.6,2,Completed in 2–5 days,2.7829244763869054
+ADV calibrated,3.6,3,Completed in 6+ days,0.15973010287726927
+ADV calibrated,3.6,4,Beyond maximum horizon,0.014184237807122704
+ADV calibrated,3.7,1,Completed in 1 day,96.8065187178165
+ADV calibrated,3.7,2,Completed in 2–5 days,2.984733004983115
+ADV calibrated,3.7,3,Completed in 6+ days,0.1875966876453794
+ADV calibrated,3.7,4,Beyond maximum horizon,0.021151589555004614
+ADV calibrated,3.8,1,Completed in 1 day,96.8065187178165
+ADV calibrated,3.8,2,Completed in 2–5 days,2.984733004983115
+ADV calibrated,3.8,3,Completed in 6+ days,0.1875966876453794
+ADV calibrated,3.8,4,Beyond maximum horizon,0.021151589555004614
+ADV calibrated,3.9,1,Completed in 1 day,96.57391770644892
+ADV calibrated,3.9,2,Completed in 2–5 days,3.1829317577734852
+ADV calibrated,3.9,3,Completed in 6+ days,0.21511761644409103
+ADV calibrated,3.9,4,Beyond maximum horizon,0.028032919333483956
+ADV calibrated,4,1,Completed in 1 day,96.3454263562854
+ADV calibrated,4,2,Completed in 2–5 days,3.377462052615143
+ADV calibrated,4,3,Completed in 6+ days,0.24228559436182145
+ADV calibrated,4,4,Beyond maximum horizon,0.034825996737634986
+ADV calibrated,4.1,1,Completed in 1 day,96.3454263562854
+ADV calibrated,4.1,2,Completed in 2–5 days,3.377462052615143
+ADV calibrated,4.1,3,Completed in 6+ days,0.24228559436182145
+ADV calibrated,4.1,4,Beyond maximum horizon,0.034825996737634986
+ADV calibrated,4.2,1,Completed in 1 day,96.12111824103565
+ADV calibrated,4.2,2,Completed in 2–5 days,3.5682605156888734
+ADV calibrated,4.2,3,Completed in 6+ days,0.2690927362114739
+ADV calibrated,4.2,4,Beyond maximum horizon,0.04152850706402246
+ADV calibrated,4.3,1,Completed in 1 day,95.90107292149101
+ADV calibrated,4.3,2,Completed in 2–5 days,3.755258550739792
+ADV calibrated,4.3,3,Completed in 6+ days,0.2955304825789051
+ADV calibrated,4.3,4,Beyond maximum horizon,0.04813804519030118
+ADV calibrated,4.4,1,Completed in 1 day,95.90107292149101
+ADV calibrated,4.4,2,Completed in 2–5 days,3.755258550739792
+ADV calibrated,4.4,3,Completed in 6+ days,0.2955304825789051
+ADV calibrated,4.4,4,Beyond maximum horizon,0.04813804519030118
+ADV calibrated,4.5,1,Completed in 1 day,95.68537666523935
+ADV calibrated,4.5,2,Completed in 2–5 days,3.9383817255904203
+ADV calibrated,4.5,3,Completed in 6+ days,0.3215895006738865
+ADV calibrated,4.5,4,Beyond maximum horizon,0.05465210849634389
+ADV calibrated,4.6,1,Completed in 1 day,95.68537666523935
+ADV calibrated,4.6,2,Completed in 2–5 days,3.9383817255904203
+ADV calibrated,4.6,3,Completed in 6+ days,0.3215895006738865
+ADV calibrated,4.6,4,Beyond maximum horizon,0.05465210849634389
+ADV calibrated,4.7,1,Completed in 1 day,95.47412328495639
+ADV calibrated,4.7,2,Completed in 2–5 days,4.117549059799303
+ADV calibrated,4.7,3,Completed in 6+ days,0.34725956666414454
+ADV calibrated,4.7,4,Beyond maximum horizon,0.06106808858016333
+ADV calibrated,4.8,1,Completed in 1 day,95.47412328495639
+ADV calibrated,4.8,2,Completed in 2–5 days,4.117549059799303
+ADV calibrated,4.8,3,Completed in 6+ days,0.34725956666414454
+ADV calibrated,4.8,4,Beyond maximum horizon,0.06106808858016333
+ADV calibrated,4.9,1,Completed in 1 day,95.26741511973215
+ADV calibrated,4.9,2,Completed in 2–5 days,4.292672193515584
+ADV calibrated,4.9,3,Completed in 6+ days,0.37252942531153604
+ADV calibrated,4.9,4,Beyond maximum horizon,0.06738326144073224
+ADV calibrated,5,1,Completed in 1 day,95.26741511973215
+ADV calibrated,5,2,Completed in 2–5 days,4.292672193515584
+ADV calibrated,5,3,Completed in 6+ days,0.37252942531153604
+ADV calibrated,5,4,Beyond maximum horizon,0.06738326144073224
+ADV calibrated,5.1,1,Completed in 1 day,95.06536419002937
+ADV calibrated,5.1,2,Completed in 2–5 days,4.463654412678209
+ADV calibrated,5.1,3,Completed in 6+ days,0.39738662160503063
+ADV calibrated,5.1,4,Beyond maximum horizon,0.07359477568739035
+ADV calibrated,5.2,1,Completed in 1 day,95.06536419002937
+ADV calibrated,5.2,2,Completed in 2–5 days,4.463654412678209
+ADV calibrated,5.2,3,Completed in 6+ days,0.39738662160503063
+ADV calibrated,5.2,4,Beyond maximum horizon,0.07359477568739035
+ADV calibrated,5.3,1,Completed in 1 day,95.06536419002937
+ADV calibrated,5.3,2,Completed in 2–5 days,4.463654412678209
+ADV calibrated,5.3,3,Completed in 6+ days,0.39738662160503063
+ADV calibrated,5.3,4,Beyond maximum horizon,0.07359477568739035
+ADV calibrated,5.4,1,Completed in 1 day,94.86809356484675
+ADV calibrated,5.4,2,Completed in 2–5 days,4.630389499370791
+ADV calibrated,5.4,3,Completed in 6+ days,0.4218172976043749
+ADV calibrated,5.4,4,Beyond maximum horizon,0.07969963817808244
+ADV calibrated,5.5,1,Completed in 1 day,94.86809356484675
+ADV calibrated,5.5,2,Completed in 2–5 days,4.630389499370791
+ADV calibrated,5.5,3,Completed in 6+ days,0.4218172976043749
+ADV calibrated,5.5,4,Beyond maximum horizon,0.07969963817808244
+ADV calibrated,5.6,1,Completed in 1 day,94.67573899012069
+ADV calibrated,5.6,2,Completed in 2–5 days,4.792760367874524
+ADV calibrated,5.6,3,Completed in 6+ days,0.44580594573926613
+ADV calibrated,5.6,4,Beyond maximum horizon,0.08569469626551872
+ADV calibrated,5.7,1,Completed in 1 day,94.67573899012069
+ADV calibrated,5.7,2,Completed in 2–5 days,4.792760367874524
+ADV calibrated,5.7,3,Completed in 6+ days,0.44580594573926613
+ADV calibrated,5.7,4,Beyond maximum horizon,0.08569469626551872
+ADV calibrated,5.8,1,Completed in 1 day,94.67573899012069
+ADV calibrated,5.8,2,Completed in 2–5 days,4.792760367874524
+ADV calibrated,5.8,3,Completed in 6+ days,0.44580594573926613
+ADV calibrated,5.8,4,Beyond maximum horizon,0.08569469626551872
+ADV calibrated,5.9,1,Completed in 1 day,94.48845084125495
+ADV calibrated,5.9,2,Completed in 2–5 days,4.950637436071939
+ADV calibrated,5.9,3,Completed in 6+ days,0.46933510716315624
+ADV calibrated,5.9,4,Beyond maximum horizon,0.09157661550996392
+ADV calibrated,6,1,Completed in 1 day,94.48845084125495
+ADV calibrated,6,2,Completed in 2–5 days,4.950637436071939
+ADV calibrated,6,3,Completed in 6+ days,0.46933510716315624
+ADV calibrated,6,4,Beyond maximum horizon,0.09157661550996392
+ADV calibrated,6.1,1,Completed in 1 day,94.48845084125495
+ADV calibrated,6.1,2,Completed in 2–5 days,4.950637436071939
+ADV calibrated,6.1,3,Completed in 6+ days,0.46933510716315624
+ADV calibrated,6.1,4,Beyond maximum horizon,0.09157661550996392
+ADV calibrated,6.2,1,Completed in 1 day,94.48845084125495
+ADV calibrated,6.2,2,Completed in 2–5 days,4.950637436071939
+ADV calibrated,6.2,3,Completed in 6+ days,0.46933510716315624
+ADV calibrated,6.2,4,Beyond maximum horizon,0.09157661550996392
+ADV calibrated,6.3,1,Completed in 1 day,94.30639648122008
+ADV calibrated,6.3,2,Completed in 2–5 days,5.103876667363346
+ADV calibrated,6.3,3,Completed in 6+ days,0.4923850001656621
+ADV calibrated,6.3,4,Beyond maximum horizon,0.09734185125092015
+ADV calibrated,6.4,1,Completed in 1 day,94.30639648122008
+ADV calibrated,6.4,2,Completed in 2–5 days,5.103876667363346
+ADV calibrated,6.4,3,Completed in 6+ days,0.4923850001656621
+ADV calibrated,6.4,4,Beyond maximum horizon,0.09734185125092015
+ADV calibrated,6.5,1,Completed in 1 day,94.30639648122008
+ADV calibrated,6.5,2,Completed in 2–5 days,5.103876667363346
+ADV calibrated,6.5,3,Completed in 6+ days,0.4923850001656621
+ADV calibrated,6.5,4,Beyond maximum horizon,0.09734185125092015
+ADV calibrated,6.6,1,Completed in 1 day,94.12976313079298
+ADV calibrated,6.6,2,Completed in 2–5 days,5.252317198764172
+ADV calibrated,6.6,3,Completed in 6+ days,0.5149330587023693
+ADV calibrated,6.6,4,Beyond maximum horizon,0.1029866117404739
+ADV calibrated,6.7,1,Completed in 1 day,94.12976313079298
+ADV calibrated,6.7,2,Completed in 2–5 days,5.252317198764172
+ADV calibrated,6.7,3,Completed in 6+ days,0.5149330587023693
+ADV calibrated,6.7,4,Beyond maximum horizon,0.1029866117404739
+ADV calibrated,6.8,1,Completed in 1 day,94.12976313079298
+ADV calibrated,6.8,2,Completed in 2–5 days,5.252317198764172
+ADV calibrated,6.8,3,Completed in 6+ days,0.5149330587023693
+ADV calibrated,6.8,4,Beyond maximum horizon,0.1029866117404739
+ADV calibrated,6.9,1,Completed in 1 day,94.12976313079298
+ADV calibrated,6.9,2,Completed in 2–5 days,5.252317198764172
+ADV calibrated,6.9,3,Completed in 6+ days,0.5149330587023693
+ADV calibrated,6.9,4,Beyond maximum horizon,0.1029866117404739
+ADV calibrated,7,1,Completed in 1 day,93.17643341186971
+ADV calibrated,7,2,Completed in 2–5 days,6.073188408074819
+ADV calibrated,7,3,Completed in 6+ days,0.611720526326094
+ADV calibrated,7,4,Beyond maximum horizon,0.13865765372938363
+ADV calibrated,7.1,1,Completed in 1 day,93.17643341186971
+ADV calibrated,7.1,2,Completed in 2–5 days,6.073188408074819
+ADV calibrated,7.1,3,Completed in 6+ days,0.611720526326094
+ADV calibrated,7.1,4,Beyond maximum horizon,0.13865765372938363
+ADV calibrated,7.2,1,Completed in 1 day,93.1764334118697
+ADV calibrated,7.2,2,Completed in 2–5 days,6.073188408074818
+ADV calibrated,7.2,3,Completed in 6+ days,0.5764638393710857
+ADV calibrated,7.2,4,Beyond maximum horizon,0.17391434068439196
+ADV calibrated,7.3,1,Completed in 1 day,93.1764334118697
+ADV calibrated,7.3,2,Completed in 2–5 days,5.94263520998024
+ADV calibrated,7.3,3,Completed in 6+ days,0.7070170374656592
+ADV calibrated,7.3,4,Beyond maximum horizon,0.17391434068439196
+ADV calibrated,7.4,1,Completed in 1 day,92.24863542740785
+ADV calibrated,7.4,2,Completed in 2–5 days,6.870433194442106
+ADV calibrated,7.4,3,Completed in 6+ days,0.6721831009496672
+ADV calibrated,7.4,4,Beyond maximum horizon,0.2087482772003839
+ADV calibrated,7.5,1,Completed in 1 day,92.24863542740785
+ADV calibrated,7.5,2,Completed in 2–5 days,6.870433194442106
+ADV calibrated,7.5,3,Completed in 6+ days,0.6721831009496672
+ADV calibrated,7.5,4,Beyond maximum horizon,0.2087482772003839
+ADV calibrated,7.6,1,Completed in 1 day,92.24863542740785
+ADV calibrated,7.6,2,Completed in 2–5 days,6.741832710372989
+ADV calibrated,7.6,3,Completed in 6+ days,0.800783585018789
+ADV calibrated,7.6,4,Beyond maximum horizon,0.20874827720038389
+ADV calibrated,7.7,1,Completed in 1 day,92.24863542740785
+ADV calibrated,7.7,2,Completed in 2–5 days,6.741832710372989
+ADV calibrated,7.7,3,Completed in 6+ days,0.7663813264415982
+ADV calibrated,7.7,4,Beyond maximum horizon,0.24315053577757492
+ADV calibrated,7.8,1,Completed in 1 day,91.3469116538451
+ADV calibrated,7.8,2,Completed in 2–5 days,7.643556483935722
+ADV calibrated,7.8,3,Completed in 6+ days,0.7663813264415976
+ADV calibrated,7.8,4,Beyond maximum horizon,0.24315053577757473
+ADV calibrated,7.9,1,Completed in 1 day,91.3469116538451
+ADV calibrated,7.9,2,Completed in 2–5 days,7.516959755741699
+ADV calibrated,7.9,3,Completed in 6+ days,0.8929780546356189
+ADV calibrated,7.9,4,Beyond maximum horizon,0.24315053577757473
+ADV calibrated,8,1,Completed in 1 day,91.3469116538451
+ADV calibrated,8,2,Completed in 2–5 days,7.516959755741699
+ADV calibrated,8,3,Completed in 6+ days,0.8590169993137379
+ADV calibrated,8,4,Beyond maximum horizon,0.2771115910994563
+ADV calibrated,8.1,1,Completed in 1 day,91.3469116538451
+ADV calibrated,8.1,2,Completed in 2–5 days,7.516959755741699
+ADV calibrated,8.1,3,Completed in 6+ days,0.8590169993137379
+ADV calibrated,8.1,4,Beyond maximum horizon,0.2771115910994563
+ADV calibrated,8.2,1,Completed in 1 day,91.3469116538451
+ADV calibrated,8.2,2,Completed in 2–5 days,7.3924220083601355
+ADV calibrated,8.2,3,Completed in 6+ days,0.9835547466953023
+ADV calibrated,8.2,4,Beyond maximum horizon,0.2771115910994563
+ADV calibrated,8.3,1,Completed in 1 day,90.47187733960385
+ADV calibrated,8.3,2,Completed in 2–5 days,8.26745632260139
+ADV calibrated,8.3,3,Completed in 6+ days,0.9500450945192617
+ADV calibrated,8.3,4,Beyond maximum horizon,0.3106212432754968
+ADV calibrated,8.4,1,Completed in 1 day,90.47187733960385
+ADV calibrated,8.4,2,Completed in 2–5 days,8.26745632260139
+ADV calibrated,8.4,3,Completed in 6+ days,0.9500450945192617
+ADV calibrated,8.4,4,Beyond maximum horizon,0.3106212432754968
+ADV calibrated,8.5,1,Completed in 1 day,90.47187733960385
+ADV calibrated,8.5,2,Completed in 2–5 days,8.26745632260139
+ADV calibrated,8.5,3,Completed in 6+ days,0.9500450945192617
+ADV calibrated,8.5,4,Beyond maximum horizon,0.3106212432754968
+ADV calibrated,8.6,1,Completed in 1 day,90.47187733960386
+ADV calibrated,8.6,2,Completed in 2–5 days,8.145037619877106
+ADV calibrated,8.6,3,Completed in 6+ days,1.039416512749836
+ADV calibrated,8.6,4,Beyond maximum horizon,0.34366852776920653
+ADV calibrated,8.7,1,Completed in 1 day,90.47187733960386
+ADV calibrated,8.7,2,Completed in 2–5 days,8.145037619877106
+ADV calibrated,8.7,3,Completed in 6+ days,1.039416512749836
+ADV calibrated,8.7,4,Beyond maximum horizon,0.34366852776920653
+ADV calibrated,8.8,1,Completed in 1 day,89.62423386842431
+ADV calibrated,8.8,2,Completed in 2–5 days,8.992681091056662
+ADV calibrated,8.8,3,Completed in 6+ days,1.0394165127498358
+ADV calibrated,8.8,4,Beyond maximum horizon,0.3436685277692065
+ADV calibrated,8.9,1,Completed in 1 day,89.6242338684243
+ADV calibrated,8.9,2,Completed in 2–5 days,8.992681091056662
+ADV calibrated,8.9,3,Completed in 6+ days,1.0068434313488122
+ADV calibrated,8.9,4,Beyond maximum horizon,0.3762416091702307
+ADV calibrated,9,1,Completed in 1 day,89.6242338684243
+ADV calibrated,9,2,Completed in 2–5 days,8.872447132444442
+ADV calibrated,9,3,Completed in 6+ days,1.127077389961034
+ADV calibrated,9,4,Beyond maximum horizon,0.3762416091702307
+ADV calibrated,9.1,1,Completed in 1 day,89.6242338684243
+ADV calibrated,9.1,2,Completed in 2–5 days,8.872447132444442
+ADV calibrated,9.1,3,Completed in 6+ days,1.127077389961034
+ADV calibrated,9.1,4,Beyond maximum horizon,0.3762416091702307
+ADV calibrated,9.2,1,Completed in 1 day,89.6242338684243
+ADV calibrated,9.2,2,Completed in 2–5 days,8.872447132444442
+ADV calibrated,9.2,3,Completed in 6+ days,1.127077389961034
+ADV calibrated,9.2,4,Beyond maximum horizon,0.3762416091702307
+ADV calibrated,9.3,1,Completed in 1 day,89.6242338684243
+ADV calibrated,9.3,2,Completed in 2–5 days,8.872447132444442
+ADV calibrated,9.3,3,Completed in 6+ days,1.0949913438869563
+ADV calibrated,9.3,4,Beyond maximum horizon,0.4083276552443082
+ADV calibrated,9.4,1,Completed in 1 day,88.80478578446936
+ADV calibrated,9.4,2,Completed in 2–5 days,9.691895216399377
+ADV calibrated,9.4,3,Completed in 6+ days,1.0949913438869563
+ADV calibrated,9.4,4,Beyond maximum horizon,0.4083276552443082
+ADV calibrated,9.5,1,Completed in 1 day,88.80478578446936
+ADV calibrated,9.5,2,Completed in 2–5 days,9.573918312303206
+ADV calibrated,9.5,3,Completed in 6+ days,1.21296824798313
+ADV calibrated,9.5,4,Beyond maximum horizon,0.4083276552443082
+ADV calibrated,9.6,1,Completed in 1 day,88.80478578446936
+ADV calibrated,9.6,2,Completed in 2–5 days,9.573918312303206
+ADV calibrated,9.6,3,Completed in 6+ days,1.21296824798313
+ADV calibrated,9.6,4,Beyond maximum horizon,0.4083276552443082
+ADV calibrated,9.7,1,Completed in 1 day,88.80478578446936
+ADV calibrated,9.7,2,Completed in 2–5 days,9.573918312303206
+ADV calibrated,9.7,3,Completed in 6+ days,1.181383216475168
+ADV calibrated,9.7,4,Beyond maximum horizon,0.43991268675226863
+ADV calibrated,9.8,1,Completed in 1 day,88.80478578446936
+ADV calibrated,9.8,2,Completed in 2–5 days,9.573918312303206
+ADV calibrated,9.8,3,Completed in 6+ days,1.181383216475168
+ADV calibrated,9.8,4,Beyond maximum horizon,0.43991268675226863
+ADV calibrated,9.9,1,Completed in 1 day,88.80478578446936
+ADV calibrated,9.9,2,Completed in 2–5 days,9.573918312303206
+ADV calibrated,9.9,3,Completed in 6+ days,1.181383216475168
+ADV calibrated,9.9,4,Beyond maximum horizon,0.43991268675226863
+ADV calibrated,10,1,Completed in 1 day,88.80478578446936
+ADV calibrated,10,2,Completed in 2–5 days,9.458278588056189
+ADV calibrated,10,3,Completed in 6+ days,1.2970229407221898
+ADV calibrated,10,4,Beyond maximum horizon,0.4399126867522686
+ADV calibrated,10.1,1,Completed in 1 day,88.0144627633346
+ADV calibrated,10.1,2,Completed in 2–5 days,10.24860160919093
+ADV calibrated,10.1,3,Completed in 6+ days,1.2970229407221903
+ADV calibrated,10.1,4,Beyond maximum horizon,0.43991268675226874
+ADV calibrated,10.2,1,Completed in 1 day,88.0144627633346
+ADV calibrated,10.2,2,Completed in 2–5 days,10.24860160919093
+ADV calibrated,10.2,3,Completed in 6+ days,1.2659542301820368
+ADV calibrated,10.2,4,Beyond maximum horizon,0.4709813972924209
+ADV calibrated,10.3,1,Completed in 1 day,88.0144627633346
+ADV calibrated,10.3,2,Completed in 2–5 days,10.24860160919093
+ADV calibrated,10.3,3,Completed in 6+ days,1.2659542301820368
+ADV calibrated,10.3,4,Beyond maximum horizon,0.4709813972924209
+ADV calibrated,10.4,1,Completed in 1 day,88.0144627633346
+ADV calibrated,10.4,2,Completed in 2–5 days,10.24860160919093
+ADV calibrated,10.4,3,Completed in 6+ days,1.2659542301820368
+ADV calibrated,10.4,4,Beyond maximum horizon,0.4709813972924209
+ADV calibrated,10.5,1,Completed in 1 day,88.0144627633346
+ADV calibrated,10.5,2,Completed in 2–5 days,10.24860160919093
+ADV calibrated,10.5,3,Completed in 6+ days,1.2659542301820368
+ADV calibrated,10.5,4,Beyond maximum horizon,0.4709813972924209
+ADV calibrated,10.6,1,Completed in 1 day,88.01446276333462
+ADV calibrated,10.6,2,Completed in 2–5 days,10.135388504671372
+ADV calibrated,10.6,3,Completed in 6+ days,1.3791673347015925
+ADV calibrated,10.6,4,Beyond maximum horizon,0.47098139729242094
+ADV calibrated,10.7,1,Completed in 1 day,88.01446276333462
+ADV calibrated,10.7,2,Completed in 2–5 days,10.135388504671372
+ADV calibrated,10.7,3,Completed in 6+ days,1.3486317962115562
+ADV calibrated,10.7,4,Beyond maximum horizon,0.5015169357824576
+ADV calibrated,10.8,1,Completed in 1 day,88.01446276333462
+ADV calibrated,10.8,2,Completed in 2–5 days,10.135388504671372
+ADV calibrated,10.8,3,Completed in 6+ days,1.3486317962115562
+ADV calibrated,10.8,4,Beyond maximum horizon,0.5015169357824576
+ADV calibrated,10.9,1,Completed in 1 day,87.25434837592411
+ADV calibrated,10.9,2,Completed in 2–5 days,10.895502892081876
+ADV calibrated,10.9,3,Completed in 6+ days,1.3486317962115555
+ADV calibrated,10.9,4,Beyond maximum horizon,0.5015169357824574
+ADV calibrated,11,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11,2,Completed in 2–5 days,10.895502892081876
+ADV calibrated,11,3,Completed in 6+ days,1.3486317962115555
+ADV calibrated,11,4,Beyond maximum horizon,0.5015169357824574
+ADV calibrated,11.1,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.1,2,Completed in 2–5 days,10.895502892081876
+ADV calibrated,11.1,3,Completed in 6+ days,1.3486317962115555
+ADV calibrated,11.1,4,Beyond maximum horizon,0.5015169357824574
+ADV calibrated,11.2,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.2,2,Completed in 2–5 days,10.895502892081876
+ADV calibrated,11.2,3,Completed in 6+ days,1.3186480899892286
+ADV calibrated,11.2,4,Beyond maximum horizon,0.5315006420047843
+ADV calibrated,11.3,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.3,2,Completed in 2–5 days,10.78481704786201
+ADV calibrated,11.3,3,Completed in 6+ days,1.4293339342090923
+ADV calibrated,11.3,4,Beyond maximum horizon,0.5315006420047843
+ADV calibrated,11.4,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.4,2,Completed in 2–5 days,10.78481704786201
+ADV calibrated,11.4,3,Completed in 6+ days,1.4293339342090923
+ADV calibrated,11.4,4,Beyond maximum horizon,0.5315006420047843
+ADV calibrated,11.5,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.5,2,Completed in 2–5 days,10.78481704786201
+ADV calibrated,11.5,3,Completed in 6+ days,1.4293339342090923
+ADV calibrated,11.5,4,Beyond maximum horizon,0.5315006420047843
+ADV calibrated,11.6,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.6,2,Completed in 2–5 days,10.78481704786201
+ADV calibrated,11.6,3,Completed in 6+ days,1.4293339342090923
+ADV calibrated,11.6,4,Beyond maximum horizon,0.5315006420047843
+ADV calibrated,11.7,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.7,2,Completed in 2–5 days,10.78481704786201
+ADV calibrated,11.7,3,Completed in 6+ days,1.4293339342090923
+ADV calibrated,11.7,4,Beyond maximum horizon,0.5315006420047843
+ADV calibrated,11.8,1,Completed in 1 day,87.25434837592411
+ADV calibrated,11.8,2,Completed in 2–5 days,10.78481704786201
+ADV calibrated,11.8,3,Completed in 6+ days,1.3999228535407569
+ADV calibrated,11.8,4,Beyond maximum horizon,0.5609117226731196
+ADV calibrated,11.9,1,Completed in 1 day,86.52571835765048
+ADV calibrated,11.9,2,Completed in 2–5 days,11.513447066135646
+ADV calibrated,11.9,3,Completed in 6+ days,1.3999228535407562
+ADV calibrated,11.9,4,Beyond maximum horizon,0.5609117226731194
+ADV calibrated,12,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12,3,Completed in 6+ days,1.507967198476895
+ADV calibrated,12,4,Beyond maximum horizon,0.5609117226731194
+ADV calibrated,12.1,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.1,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12.1,3,Completed in 6+ days,1.507967198476895
+ADV calibrated,12.1,4,Beyond maximum horizon,0.5609117226731194
+ADV calibrated,12.2,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.2,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12.2,3,Completed in 6+ days,1.507967198476895
+ADV calibrated,12.2,4,Beyond maximum horizon,0.5609117226731194
+ADV calibrated,12.3,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.3,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12.3,3,Completed in 6+ days,1.507967198476895
+ADV calibrated,12.3,4,Beyond maximum horizon,0.5609117226731194
+ADV calibrated,12.4,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.4,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12.4,3,Completed in 6+ days,1.507967198476895
+ADV calibrated,12.4,4,Beyond maximum horizon,0.5609117226731194
+ADV calibrated,12.5,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.5,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12.5,3,Completed in 6+ days,1.4791520697334333
+ADV calibrated,12.5,4,Beyond maximum horizon,0.5897268514165809
+ADV calibrated,12.6,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.6,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12.6,3,Completed in 6+ days,1.4791520697334333
+ADV calibrated,12.6,4,Beyond maximum horizon,0.5897268514165809
+ADV calibrated,12.7,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.7,2,Completed in 2–5 days,11.405402721199511
+ADV calibrated,12.7,3,Completed in 6+ days,1.4791520697334333
+ADV calibrated,12.7,4,Beyond maximum horizon,0.5897268514165809
+ADV calibrated,12.8,1,Completed in 1 day,86.52571835765048
+ADV calibrated,12.8,2,Completed in 2–5 days,11.401384088562265
+ADV calibrated,12.8,3,Completed in 6+ days,1.4831707023706786
+ADV calibrated,12.8,4,Beyond maximum horizon,0.5897268514165809
+ADV calibrated,12.9,1,Completed in 1 day,86.52571835765049
+ADV calibrated,12.9,2,Completed in 2–5 days,11.300130796863831
+ADV calibrated,12.9,3,Completed in 6+ days,1.584423994069109
+ADV calibrated,12.9,4,Beyond maximum horizon,0.589726851416581
+ADV calibrated,13,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13,2,Completed in 2–5 days,11.995756693296036
+ADV calibrated,13,3,Completed in 6+ days,1.5844239940691092
+ADV calibrated,13,4,Beyond maximum horizon,0.5897268514165811
+ADV calibrated,13.1,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.1,2,Completed in 2–5 days,11.995756693296036
+ADV calibrated,13.1,3,Completed in 6+ days,1.5844239940691092
+ADV calibrated,13.1,4,Beyond maximum horizon,0.5897268514165811
+ADV calibrated,13.2,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.2,2,Completed in 2–5 days,11.995756693296034
+ADV calibrated,13.2,3,Completed in 6+ days,1.556231175042849
+ADV calibrated,13.2,4,Beyond maximum horizon,0.6179196704428419
+ADV calibrated,13.3,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.3,2,Completed in 2–5 days,11.995756693296034
+ADV calibrated,13.3,3,Completed in 6+ days,1.556231175042849
+ADV calibrated,13.3,4,Beyond maximum horizon,0.6179196704428419
+ADV calibrated,13.4,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.4,2,Completed in 2–5 days,11.995756693296034
+ADV calibrated,13.4,3,Completed in 6+ days,1.556231175042849
+ADV calibrated,13.4,4,Beyond maximum horizon,0.6179196704428419
+ADV calibrated,13.5,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.5,2,Completed in 2–5 days,11.995756693296034
+ADV calibrated,13.5,3,Completed in 6+ days,1.556231175042849
+ADV calibrated,13.5,4,Beyond maximum horizon,0.6179196704428419
+ADV calibrated,13.6,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.6,2,Completed in 2–5 days,11.995756693296034
+ADV calibrated,13.6,3,Completed in 6+ days,1.556231175042849
+ADV calibrated,13.6,4,Beyond maximum horizon,0.6179196704428419
+ADV calibrated,13.7,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.7,2,Completed in 2–5 days,11.995756693296034
+ADV calibrated,13.7,3,Completed in 6+ days,1.556231175042849
+ADV calibrated,13.7,4,Beyond maximum horizon,0.6179196704428419
+ADV calibrated,13.8,1,Completed in 1 day,85.83009246121827
+ADV calibrated,13.8,2,Completed in 2–5 days,11.89340881138114
+ADV calibrated,13.8,3,Completed in 6+ days,1.6585790569577459
+ADV calibrated,13.8,4,Beyond maximum horizon,0.617919670442842
+ADV calibrated,13.9,1,Completed in 1 day,85.83009246121829
+ADV calibrated,13.9,2,Completed in 2–5 days,11.893408811381141
+ADV calibrated,13.9,3,Completed in 6+ days,1.5261205473451114
+ADV calibrated,13.9,4,Beyond maximum horizon,0.7503781800554756
+ADV calibrated,14,1,Completed in 1 day,85.83009246121829
+ADV calibrated,14,2,Completed in 2–5 days,11.893408811381141
+ADV calibrated,14,3,Completed in 6+ days,1.5261205473451114
+ADV calibrated,14,4,Beyond maximum horizon,0.7503781800554756
+ADV calibrated,14.1,1,Completed in 1 day,85.83009246121829
+ADV calibrated,14.1,2,Completed in 2–5 days,11.893408811381141
+ADV calibrated,14.1,3,Completed in 6+ days,1.5261205473451114
+ADV calibrated,14.1,4,Beyond maximum horizon,0.7503781800554756
+ADV calibrated,14.2,1,Completed in 1 day,85.83009246121829
+ADV calibrated,14.2,2,Completed in 2–5 days,11.893408811381141
+ADV calibrated,14.2,3,Completed in 6+ days,1.5261205473451114
+ADV calibrated,14.2,4,Beyond maximum horizon,0.7503781800554756
+ADV calibrated,14.3,1,Completed in 1 day,85.83009246121829
+ADV calibrated,14.3,2,Completed in 2–5 days,11.893408811381141
+ADV calibrated,14.3,3,Completed in 6+ days,1.5261205473451114
+ADV calibrated,14.3,4,Beyond maximum horizon,0.7503781800554756
+ADV calibrated,14.4,1,Completed in 1 day,85.16930619062981
+ADV calibrated,14.4,2,Completed in 2–5 days,12.554195081969604
+ADV calibrated,14.4,3,Completed in 6+ days,1.5261205473451118
+ADV calibrated,14.4,4,Beyond maximum horizon,0.7503781800554759
+ADV calibrated,14.5,1,Completed in 1 day,85.16930619062981
+ADV calibrated,14.5,2,Completed in 2–5 days,12.554195081969604
+ADV calibrated,14.5,3,Completed in 6+ days,1.3955673492505387
+ADV calibrated,14.5,4,Beyond maximum horizon,0.8809313781500486
+ADV calibrated,14.6,1,Completed in 1 day,85.16930619062981
+ADV calibrated,14.6,2,Completed in 2–5 days,12.554195081969604
+ADV calibrated,14.6,3,Completed in 6+ days,1.3955673492505387
+ADV calibrated,14.6,4,Beyond maximum horizon,0.8809313781500486
+ADV calibrated,14.7,1,Completed in 1 day,85.16930619062981
+ADV calibrated,14.7,2,Completed in 2–5 days,12.554195081969604
+ADV calibrated,14.7,3,Completed in 6+ days,1.3955673492505387
+ADV calibrated,14.7,4,Beyond maximum horizon,0.8809313781500486
+ADV calibrated,14.8,1,Completed in 1 day,85.16930619062981
+ADV calibrated,14.8,2,Completed in 2–5 days,12.554195081969604
+ADV calibrated,14.8,3,Completed in 6+ days,1.3955673492505387
+ADV calibrated,14.8,4,Beyond maximum horizon,0.8809313781500486
+ADV calibrated,14.9,1,Completed in 1 day,85.16930619062981
+ADV calibrated,14.9,2,Completed in 2–5 days,12.554195081969604
+ADV calibrated,14.9,3,Completed in 6+ days,1.3955673492505387
+ADV calibrated,14.9,4,Beyond maximum horizon,0.8809313781500486
+ADV calibrated,15,1,Completed in 1 day,85.16930619062983
+ADV calibrated,15,2,Completed in 2–5 days,12.454948876218367
+ADV calibrated,15,3,Completed in 6+ days,1.4948135550017776
+ADV calibrated,15,4,Beyond maximum horizon,0.8809313781500487

@@ -39,6 +39,21 @@ footer{height:54px;border-top:1px solid var(--line);display:flex;align-items:cen
 .demo-subtabs button{padding:10px 16px;border:1px solid var(--line);border-radius:6px;background:var(--card);font-size:14px;cursor:pointer}
 .demo-subtabs button[aria-pressed=true]{background:var(--ink);color:white;border-color:var(--ink)}
 .demo-subtabs button:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.migration-subtabs{margin:18px 0}
+.count-explorer{padding:22px!important}
+.range-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:20px 0 12px}
+.range-control{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:7px 12px;padding:16px;border:1px solid var(--line);border-radius:9px;background:#faf8f2}
+.range-control>span{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:12px}.range-control strong{font-size:12px}.range-control em{font-style:normal;font-family:Georgia,serif;font-size:19px;color:var(--green)}
+.range-control input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--green)}.range-control small{font-size:10px;color:var(--muted)}.range-control small:last-child{text-align:right}
+.count-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}.count-kpis span{padding:12px;border:1px solid var(--line);border-radius:8px;background:#faf8f2}.count-kpis small{display:block;color:var(--muted);font-size:10px;line-height:1.35}.count-kpis strong{display:block;margin-top:4px;font-size:19px;font-family:Georgia,serif}
+.model-explanation{color:var(--muted);font-size:12px;line-height:1.55;margin:14px 0 0}
+@media(max-width:800px){.range-grid{grid-template-columns:1fr}.count-kpis{grid-template-columns:1fr 1fr}}
 .impact-plot{overflow-x:auto;margin:16px 0}.impact-plot svg{display:block;width:100%;min-width:540px}
 .impact-axis{font-size:13px;fill:var(--muted)}.impact-selected{background:#e0eee9}
 .demo-controls .input-wrap select{width:100%;height:100%;border:0;background:transparent;padding:0 7px;color:var(--ink);font:inherit;font-weight:650;outline:0}
+
+.field select { width:100%; min-width:0; padding:9px 10px; border:1px solid #d4ded9; border-radius:8px; background:#fff; color:#172f2a; font:inherit; }
+.content { min-width:0; }
+.content > .card { padding:18px; margin-bottom:14px; }
+.input-section > .field { margin-bottom:10px; }
+.input-section > p { font-size:11px; line-height:1.5; color:var(--muted); margin:10px 0; }

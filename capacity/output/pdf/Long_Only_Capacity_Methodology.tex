@@ -8,18 +8,18 @@
 \numberwithin{equation}{section}
 \pagestyle{fancy}\fancyhf{}
 \lhead{Long-Only Capacity Methodology}
-\rhead{Revised 27 September 2026}
+\rhead{Revised 29 September 2026}
 \cfoot{\thepage}\setlength{\headheight}{14pt}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \title{\textbf{Long-Only Equity Capacity Methodology}\\[0.4em]
 \large Distributional Liquidity Migration, Execution Horizons and Alpha Decay}
 \author{Rodrigo Dupleich\thanks{with the help of ChatGTP}}
-\date{27 September 2026}
+\date{29 September 2026}
 
 \begin{document}
 \maketitle
 \begin{abstract}
-This document defines the stable methodology for estimating the capacity of a long-only equity
+This document defines two complementary implementations of the methodology for estimating the capacity of a long-only equity
 strategy. It separates the methodology from portfolio-specific runs. Each run should produce a
 separate report containing the supplied inputs, fitted parameters, diagnostics, scenarios,
 thresholds and warnings. Appendices A--C define the user input contract and distinguish supplied,
@@ -35,11 +35,9 @@ participation, execution horizons, implementation costs and captured alpha:
  A\rightarrow F_A(p)\rightarrow D(p)\rightarrow
  \{\bar c(A),R_g(A)\}\rightarrow R_{\mathrm{net}}(A),IR_{\mathrm{net}}(A).
 \end{equation}
-Turnover $T$ is one-way annual turnover, so executed purchases and sales are approximated by
-$2TA$. Cost is expressed in basis points per executed notional.
+Turnover $T$ is one-way annual turnover, so purchases and sales are approximated by $2TA$. In the ADV branch this is intended trading before an execution-horizon constraint. Observed cost is expressed in basis points per executed notional; the ADV scenario cost below includes completion and is expressed per intended traded dollar.
 
-The model consumes either aggregate ADV buckets or, preferably, parent-order data. Aggregate
-bucket shares are interpreted as shares of executed notional, not trade-count frequencies.
+The model consumes either aggregate ADV buckets or, preferably, parent-order data. In the Burr implementation, aggregate bucket shares are shares of executed notional. The ADV-calibrated implementation jointly fits parent-order counts and traded values, using universe ADV percentiles as a liquidity prior. These are distinct weighting measures and are reported separately.
 
 \section{Strategy economics}
 At current AUM $A_0$, the key quantities are gross relative return $R_g$, tracking error $TE$,
@@ -48,15 +46,16 @@ turnover $T$ and average holdings $N$:
  IR_g=\frac{R_g}{TE},\qquad
  \alpha_{\mathrm{holding}}=\frac{R_g}{N},\qquad
  \alpha_{\mathrm{cycle}}=\frac{R_g}{T},\qquad
- H\approx\frac{1}{T}.
+ \mathcal{H}\approx\frac{1}{T}.
 \end{equation}
-Current gross alpha is treated as already reflecting the current implementation schedule. Alpha
+Here $\mathcal{H}$ denotes the approximate holding period in years; $H$ below denotes the number of holdings. Current gross alpha is treated as already reflecting the current implementation schedule. Alpha
 decay at alternative AUM levels is therefore measured relative to the current schedule.
 
 \section{Distributional liquidity migration}\label{sec:migration}
 Capacity depends on parent-order participation $p=Q/\mathrm{ADV}$, not ADV in isolation. Modelling
 ADV alone would require a joint model for parent-order size and its dependence on ADV.
 
+\subsection{Burr reference model}
 The aggregate implementation fits a Burr XII distribution:
 \begin{equation}\label{eq:burr}
  F(p;c,d,\lambda)=1-\left[1+\left(\frac{p}{\lambda}\right)^c\right]^{-d}.
@@ -96,6 +95,74 @@ Bucket weights in equation~\eqref{eq:weights} summarize this distribution for ch
 continuous model does not multiply them into its costs a second time: the notional weights
 are already represented by the quantile average made explicit in Section~\ref{sec:net}.
 
+
+\subsection{Joint ADV and parent-order calibration}\label{sec:joint}
+Let $n_b$ and $V_b$ be the annual parent-order count and traded dollars in participation bucket
+$b=(\ell_b,u_b]$. Let $A_\star$, $H_\star$ and $T_\star$ denote the fixed historical AUM,
+average holdings and one-way turnover. These historical quantities are distinct from editable
+scenario inputs. The sample determines
+\begin{equation}\label{eq:historical}
+ N_\star=\sum_b n_b,\qquad V_\star=\sum_b V_b,\qquad
+ T_\star=\frac{V_\star}{2A_\star},\qquad \bar Q_b=\frac{V_b}{n_b}.
+\end{equation}
+Universe ADV quantiles describe the cross-section of eligible stocks, not the frequency or value
+of trades. For supplied percentile fractions $r_j$ and dollar ADVs $L_j$, interpolate between
+successive points in log dollars:
+\begin{equation}\label{eq:advinterpolation}
+ L(r)=\exp\{(1-t)\log L_j+t\log L_{j+1}\},\qquad
+ t=\frac{r-r_j}{r_{j+1}-r_j}.
+\end{equation}
+The current quadrature uses 100 midpoint percentile ranks and 16 evenly spaced interior
+participation points within each bucket. A candidate cell $k$ in bucket $b$ has ADV $L_k$,
+participation $p_k\in(\ell_b,u_b)$ and ticket $Q_k=p_kL_k$.
+Its positive prior weight is proportional to
+\begin{equation}\label{eq:prior}
+ \pi_{bk}\propto\exp\left\{\beta(2r_k-1)
+ -\frac12\left[\frac{\log(Q_k/\bar Q_b)}{1.5}\right]^2\right\}.
+\end{equation}
+The fixed log-ticket width 1.5 is a modelling choice. The liquidity-preference parameter
+$\beta\in\{-2,0,2\}$ favours illiquid, neutral or liquid ranks before calibration.
+For each bucket, minimum-relative-entropy weights satisfy
+\begin{equation}\label{eq:jointfit}
+ \min_{w_{bk}\geq0}\sum_k w_{bk}\log\frac{w_{bk}}{\pi_{bk}},
+ \qquad \sum_k w_{bk}=1,\qquad \sum_k w_{bk}Q_k=\bar Q_b.
+\end{equation}
+The implementation solves the one-dimensional exponential tilt
+\begin{equation}\label{eq:tilt}
+ w_{bk}(\theta_b)=\frac{\pi_{bk}\exp(\theta_b Q_k/Q_{b,\max})}
+ {\sum_h\pi_{bh}\exp(\theta_b Q_h/Q_{b,\max})},\qquad
+ \nu_{bk}=n_bw_{bk}.
+\end{equation}
+Thus $\sum_k\nu_{bk}=n_b$ and $\sum_k\nu_{bk}Q_k=V_b$. Fractional counts are quadrature
+weights, not claims that fractional historical orders occurred. A bucket whose mean ticket lies
+outside the candidate support is reported as infeasible. Changing preference refits the weights.
+The observations do not uniquely identify the joint distribution: the prior resolves an
+underidentified allocation. It does not impose equal trading shares across universe deciles or
+reconstruct the actual 40-stock portfolio.
+
+\subsection{Scenario scaling and migration}\label{sec:advscaling}
+For scenario AUM $A$, holdings $H$ and decimal one-way turnover $T$, the ADV model uses
+\begin{equation}\label{eq:advscaling}
+ s_Q=\frac{A}{A_\star}\frac{H_\star}{H},\qquad
+ s_N=\frac{H}{H_\star}\frac{T}{T_\star},\qquad
+ Q'_k=s_QQ_k,\quad \nu'_k=s_N\nu_k,\quad p'_k=\frac{Q'_k}{vL_k}.
+\end{equation}
+Here $v>0$ is the market-volume factor (1 for observed ADV, 0.5 for a 50\% volume stress).
+Higher turnover increases frequency, rather than ticket size, under this convention.
+Higher holdings decreases tickets and increases frequency. These behavioural assumptions imply
+\begin{equation}\label{eq:conservation}
+ \sum_k\nu'_kQ'_k=s_Ns_QV_\star=2AT.
+\end{equation}
+For positive turnover, count and intended-notional migration shares are
+\begin{equation}\label{eq:advmigration}
+ f_b(A)=\frac{\sum_k\nu'_k\mathbf{1}_{\{p'_k\in b\}}}{\sum_k\nu'_k},\qquad
+ w_b(A)=\frac{\sum_k\nu'_kQ'_k\mathbf{1}_{\{p'_k\in b\}}}{\sum_k\nu'_kQ'_k}.
+\end{equation}
+At zero turnover the interface displays zero trading shares. It continues to show hypothetical
+order-level execution diagnostics. An additional bucket retains participation above 100\% ADV.
+The ADV engine does not apply Burr elasticities $\eta$ or $\kappa$; one annual sample cannot
+identify their response to AUM growth. Frequency changes alone leave percentage migration unchanged.
+
 \section{Impact model}
 Expected and realised costs are fitted separately using
 \begin{equation}\label{eq:impact}
@@ -106,7 +173,7 @@ implementation permits the exponent to be fitted \cite{farmer2011}. At current A
 distributional expectation is calibrated back to the observed notional-weighted bucket cost.
 
 \section{Execution horizon}
-For target daily participation $\rho$ and maximum horizon $D_{\max}$,
+In the Burr reference model, for target daily participation $\rho$ and maximum horizon $D_{\max}$,
 \begin{equation}\label{eq:days}
  D(p)=\min\!\left(D_{\max},\max\!\left(1,
  \left\lceil\frac{p}{\rho}\right\rceil\right)\right).
@@ -118,6 +185,20 @@ Current costs already embed the current schedule, so counterfactual effective pa
 The rule exposes the cost-versus-delay trade-off studied in optimal execution
 \cite{almgren2001}. A production version can replace it with direct optimisation.
 
+
+In the ADV-calibrated model, the participation limit is enforced without treating truncated
+orders as complete. Required days, scheduled days and completion fraction are
+\begin{equation}\label{eq:advexecution}
+ D_k^{\rm req}=\max(1,\lceil p'_k/\rho\rceil),\qquad
+ d_k=\min(D_{\max},D_k^{\rm req}),\qquad
+ e_k=\min(1,D_{\max}\rho/p'_k).
+\end{equation}
+The implementation floors $D_{\max}$ to a positive integer. Required-day averages use
+$D_k^{\rm req}$, not $d_k$. Impact uses $\widetilde p_k=\min(p'_k,\rho)$ as a daily-rate proxy.
+This proxy approximates a participation-capped schedule and does not model the smaller final
+slice separately. Alpha capture uses equal slices over $d_k$ for the completed fraction.
+These two scheduling approximations should be refined together when daily executions are available.
+
 \section{Alpha decay}
 Let $H_\alpha$ be signal half-life in trading days and $\delta=\log(2)/H_\alpha$. For equal daily
 slices over $D$ days, average alpha capture is
@@ -125,7 +206,7 @@ slices over $D$ days, average alpha capture is
  g(D,H_\alpha)=\frac{1}{D}\sum_{t=0}^{D-1}e^{-\delta t}
  =\frac{1-e^{-\delta D}}{D(1-e^{-\delta})}.
 \end{equation}
-Normalising to current implementation gives
+For the Burr model, normalising each notional rank to current implementation gives
 \begin{equation}\label{eq:gross}
  R_g(A)=R_g(A_0)\,
  \mathbb{E}\left[\frac{g(D_j(A),H_{\alpha,j})}
@@ -135,7 +216,14 @@ Aggregate runs currently weight alpha by executed notional. Trade-level runs sho
 order's forecast alpha contribution. Predictors with different mean-reversion speeds imply
 different desired trading speeds \cite{garleanu2013}.
 
+
+For the ADV model, the completed alpha fraction is $e_k g(d_k,H_\alpha)$; unfinished notional
+contributes zero captured alpha. The engine normalises the aggregate capture to its historical
+aggregate, rather than averaging the individual ratios used by Burr. The resulting equation is
+specified below.
+
 \section{Net capacity}\label{sec:net}
+\subsection{Burr implementation}
 The participation distribution specified in Section~\ref{sec:migration} determines $p_A(q)$
 through equations~\eqref{eq:burr}, \eqref{eq:scaling} and \eqref{eq:quantile}.
 For each notional rank $q$, the execution rule in equation~\eqref{eq:days} is evaluated
@@ -214,6 +302,44 @@ increase. This is an illustrative rank, not a claim about the entire portfolio.
 A run report should show the complete capacity curve and explicitly selected thresholds rather
 than presenting a single universal capacity number.
 
+
+\subsection{ADV-calibrated implementation}\label{sec:advnet}
+Section~\ref{sec:joint} supplies calibrated synthetic counts and tickets. Section~\ref{sec:advscaling}
+scales them into participation, and equation~\eqref{eq:advexecution} supplies completion and delay.
+Because every ticket scales by the same factor, the intended-notional weights are invariant:
+\begin{equation}\label{eq:advweights}
+ \omega_k=\frac{\nu_kQ_k}{V_\star},\qquad \sum_k\omega_k=1.
+\end{equation}
+Evaluate the historical reference at $A=A_\star$, $H=H_\star$, $v=1$, under the selected daily
+participation limit, horizon and half-life. Use a subscript $\star$ for those reference execution
+quantities. Then
+\begin{equation}\label{eq:advnormalisation}
+ G_\star=\sum_k\omega_ke_{k,\star}g(d_{k,\star},H_\alpha),\qquad
+ K_{\rm ADV}=\frac{\sum_b(V_b/V_\star)c_b^{\rm obs}}
+ {\sum_k\omega_ke_{k,\star}c(\widetilde p_{k,\star})}.
+\end{equation}
+The current dashboard uses expected bucket costs for this anchor. Its captured gross alpha and
+cost in basis points per intended traded dollar are
+\begin{equation}\label{eq:advnetinputs}
+ \begin{aligned}
+ R_g^{\rm ADV}(A)&=R_{g,\star}
+ \frac{\sum_k\omega_ke_kg(d_k,H_\alpha)}{G_\star},\\
+ \bar c^{\rm ADV}(A)&=K_{\rm ADV}\sum_k\omega_ke_kc(\widetilde p_k),\\
+ U(A)&=\sum_k\omega_k(1-e_k).
+ \end{aligned}
+\end{equation}
+Here $U$ is the unfinished fraction of intended notional. Substituting $\bar c^{\rm ADV}$ into
+equations~\eqref{eq:drag} and \eqref{eq:net} yields annual drag, net alpha and net IR. In this
+branch $2AT$ is intended annual trading; completion is already included through $e_k$, and must
+not be applied again. Declining costs caused by non-completion are not evidence of improved
+execution: $U$ and captured alpha must be read alongside costs.
+
+At the historical reference the normalisation reproduces the supplied alpha and weighted cost.
+Changing execution-policy controls also changes $G_\star$ and $K_{\rm ADV}$. Consequently the
+current engine compares relative AUM scenarios under each selected policy; it is not an absolute
+historical execution-policy backtest. Neither aggregate branch identifies overlapping orders in
+one stock, time-varying volume, actual holdings selection or order-level alpha contributions.
+
 \section{Required run-report contents}
 Every portfolio run report must include:
 \begin{enumerate}
@@ -222,7 +348,8 @@ Every portfolio run report must include:
   \item fitted distribution and impact parameters with fit diagnostics;
   \item current-AUM reconciliation to observed costs and alpha;
   \item AUM scenario table and continuous capacity curves;
-  \item bucket migration and execution-horizon diagnostics;
+  \item engine identity, count and dollar calibration residuals, migration and execution-horizon diagnostics;
+  \item for ADV runs, preference prior, volume stress, uncapped required days and unfinished notional;
   \item selected capacity thresholds and exact crossing estimates;
   \item data-quality, extrapolation and model-risk warnings.
 \end{enumerate}
@@ -233,6 +360,94 @@ participation buckets are ordered and non-overlapping, expected and realised cos
 benchmark, and current-AUM impact reconciles to the supplied weighted cost. The report should flag
 missing trade-level alpha weights, large extrapolations, horizons at $D_{\max}$, unstable tail fits
 and sensitivity to user policy parameters.
+
+
+\section{Current calibration and dashboard interpretation}
+The supplied annual sample contains 971 parent orders and USD 944.475 million of two-way
+traded value at historical AUM USD 3.4 billion. It implies $T_\star=13.889338\%$ one-way
+turnover. The dashboard's rounded 13.9\% scenario produces USD 945.2 million of intended
+annual trading and approximately 971.7 expected orders at 40 holdings. This rounding difference
+is intentional; the calibration table itself reconciles to the exact historical totals.
+
+The 203-stock eligible universe has a one-year ADV lookback. The supplied percentile boundaries
+are shown below; they are not mean ADVs within deciles.
+\begin{center}
+\begin{tabular}{rrrrrrrrrrr}
+\toprule
+Q0 & Q10 & Q20 & Q30 & Q40 & Q50 & Q60 & Q70 & Q80 & Q90 & Q100\\
+\midrule
+0.020 & 0.050 & 0.130 & 0.800 & 1.000 & 1.420 & 2.000 & 4.000 & 6.000 & 50.000 & 200.000\\
+\bottomrule
+\end{tabular}\\[3pt]
+\small ADV in USD millions per day.
+\end{center}
+With 40 assumed holdings and unchanged frequency, doubling AUM doubles every synthetic ticket;
+annual order count remains unchanged. With the same AUM and twice the holdings, tickets halve
+and frequency doubles. With twice the turnover alone, frequency doubles but participation
+shares are unchanged. These identities are model assumptions, not estimated portfolio responses.
+
+The main dashboard retains Burr as the default comparison. Selecting ADV-calibrated migration
+updates the overview and alpha-decay engine. The liquidity demo provides independent ADV and
+Burr controls; resetting a demo copies current dashboard assumptions without modifying the main
+case. The ADV demo shows count and dollar migration, historical reconciliation, execution
+feasibility and relative alpha capture. The impact demo illustrates $a+bp^\gamma$ independently.
+The alpha-decay demo adds a waiting-time factor $2^{-t/H_\alpha}$ to implemented gross alpha
+and displays 126 trading days, approximately six months; this is an explanatory extension,
+not an additional waiting penalty in the capacity engine.
+
+Validation covers historical counts and values, percentile interpolation, annual trading
+conservation, volume-stress equivalence and infeasible calibration inputs. Quadrature density,
+liquidity preference and ticket-prior width require sensitivity review before operational use.
+
+\section{Running the dashboard implementations}\label{sec:running}
+The methodology is distributed through two dashboard implementations. The browser version
+evaluates the model interactively from the source parameters. The Power BI version uses generated
+scenario tables so that it can be distributed through standard Power BI files and workspaces.
+Both implementations use USD, the same live bucket observations, the same universe ADV
+quantiles and the same Burr and ADV calibration inputs.
+
+\subsection{Browser dashboard}
+The browser dashboard requires Node.js 22.13 or later. From the project root, install the locked
+dependencies and start the local development server with
+\begin{verbatim}
+cd dashboard
+npm ci
+npm run dev -- --host 127.0.0.1 --port 3011
+\end{verbatim}
+The dashboard is then available at \url{http://localhost:3011}. The process remains attached to
+the terminal and is stopped with \texttt{Ctrl+C}. Before distributing a change, the production
+build and the model checks should be run from the \texttt{dashboard} directory:
+\begin{verbatim}
+npm run build
+node --experimental-strip-types --test tests/adv-migration.test.mjs
+\end{verbatim}
+The browser version recalculates immediately when the user changes AUM, holdings, turnover,
+participation, execution horizon, alpha half-life or the available model-specific controls.
+
+\subsection{Power BI dashboard}
+\begin{sloppypar}
+The portable Power BI materials are stored in the \path{powerbi} directory and in the archive
+\path{CapacityLab-PowerBI.zip}. On a Windows machine with Power BI Desktop, the archive is
+extracted and every CSV file in \texttt{powerbi/data} is imported through \emph{Get data--Text/CSV}.
+The first row is promoted to column headers. The measures in
+\path{powerbi/CapacityLab.dax} are added to the \texttt{Scenarios} table, and
+\path{powerbi/CapacityLab-theme.json} is imported through
+\emph{View--Themes--Browse for themes}. The accompanying README specifies the fields and visual
+types for the Overview, Liquidity migration and Demo building blocks pages. The completed report
+can be saved as a \texttt{.pbix} file or as a source-controlled \texttt{.pbip} project.
+
+The supplied Power BI tables cover AUM from \$0.1bn to \$15.0bn in \$0.1bn increments. They
+include the ADV-calibrated and Burr scenarios, traded-dollar and parent-order migration,
+execution outcomes, alpha-decay paths, bucket inputs, ADV percentiles and fitted calibrations.
+After changing a structural model input, the scenario tables are regenerated from the
+\texttt{dashboard} directory with
+\begin{verbatim}
+node --experimental-strip-types scripts/export-powerbi.mjs
+\end{verbatim}
+and the Power BI tables are refreshed. AUM, model and view selections operate as report filters;
+turnover, holdings, participation limits and fitted coefficients require regeneration because the
+Power BI implementation is a scenario grid rather than a live JavaScript calculation engine.
+\end{sloppypar}
 
 \appendix
 \section{User-supplied data inputs}
@@ -251,7 +466,7 @@ Current AUM $A_0$ & Required & Currency bn & Average deployed AUM represented by
 Gross expected alpha $R_g$ & Required & Decimal p.a. & Expected relative return before modeled impact; document whether existing live slippage is embedded.\\
 Tracking error $TE$ & Required & Decimal p.a. & Annualised ex-ante or realised relative volatility; must be positive and methodologically aligned with alpha.\\
 One-way turnover $T$ & Required & Decimal p.a. & Purchases or sales divided by average AUM. Do not supply two-way turnover without changing the convention.\\
-Average holdings $N$ & Diagnostic & Count & Average number of portfolio positions over the measurement period.\\
+Average holdings $N$ or $H$ & Required for ADV scaling & Count & Historical and scenario average positions; distinct from eligible universe size.\\
 Bucket lower and upper bounds & Required for aggregate run & Fraction of ADV & Ordered, non-overlapping participation intervals covering the full positive range.\\
 Executed-notional share & Required for aggregate run & Fraction summing to 1 & Annual executed-notional mass in each bucket; not trade-count frequency.\\
 Representative participation & Required for impact fit & Fraction of ADV & Prefer the notional-weighted mean participation within each bucket.\\
@@ -259,6 +474,8 @@ Expected impact & Required & bp / executed notional & Expected implementation co
 Realised impact & Recommended & bp / executed notional & Realised cost using the same benchmark as expected impact.\\
 Parent-order notional or shares & Required for trade-level run & Currency / shares & Parent order before child-order slicing, net of cancellations according to a declared convention.\\
 Security ADV & Required for trade-level run & Currency or shares/day & ADV measured consistently with order units, including declared lookback and lag.\\
+Annual bucket counts and values & Required for ADV calibration & Count / currency & Parent orders and two-way traded dollars for the same historical period and strategy.\\
+Universe ADV quantiles & Required for ADV calibration & Percentile / currency per day & Include minimum and maximum, universe size and lookback; specify the daily-volume statistic.\\
 Order timestamps & Recommended & Datetime & Decision, release, first fill and final fill times.\\
 Actual execution horizon & Recommended & Trading days & Number of sessions over which the parent order was worked.\\
 Forecast alpha & Recommended & bp or return & Expected contribution at the order decision timestamp.\\
@@ -282,10 +499,12 @@ Parameter & Example & Unit & Interpretation\\
 Participation-scale elasticity $\eta$ & 0.85 & Elasticity & Response of the Burr scale to AUM. Set to 1 for proportional scaling; estimate from portfolio rescaling where possible.\\
 Tail-thickening elasticity $\kappa$ & 0.00 & Elasticity & Structural change in upper-tail liquidity composition. Keep at zero unless supported by portfolio simulations or observations.\\
 Target daily participation $\rho$ & 10\% & ADV/day & Execution-policy target used to determine horizon.\\
-Maximum execution horizon $D_{\max}$ & 10 & Trading days & Maximum permitted horizon before daily participation exceeds the target.\\
+Maximum execution horizon $D_{\max}$ & 10 & Trading days & Burr caps the horizon; ADV caps completion and reports unfinished notional.\\
 Alpha half-life $H_\alpha$ & 10 & Trading days & Time for forecast alpha to halve. Prefer signal-specific empirical estimates.\\
 AUM scenario grid & 1--100 & Currency bn & Range over which curves and thresholds are evaluated.\\
-Net IR threshold & 0.75 & Ratio & Minimum acceptable net information ratio.\\
+Liquidity preference $\beta$ & $-2,0,2$ & Prior tilt & Illiquid, neutral or liquid preference; not an observed trading allocation.\\
+Market-volume factor $v$ & 1.00 & Multiplier & Stress scenario applied to ADV after historical calibration.\\
+Net IR threshold & 0.40 & Ratio & Minimum acceptable net information ratio.\\
 Alpha-retention threshold & 80\% & Percentage & Minimum fraction of current gross alpha remaining after delay and impact.\\
 Impact-drag threshold & 100 & bp p.a. & Maximum acceptable annual return drag.\\
 Alpha-capture threshold & 95\% & Percentage & Minimum gross alpha retained after execution delay, before impact.\\
@@ -296,7 +515,7 @@ Alpha-capture threshold & 95\% & Percentage & Minimum gross alpha retained after
 The user does not normally supply Burr parameters $(c,d,\lambda_0)$ or impact parameters
 $(a,b,\gamma)$; the model estimates them. Every run report should disclose them along with the tail
 index $cd$, bucket-fit residuals, impact-fit residuals, baseline calibration multiplier, threshold
-crossings and warnings. Parameters should be versioned with their input sample and estimation date.
+crossings and warnings. Parameters should be versioned with their input sample and estimation date. ADV runs additionally disclose bucket tilts, grid density, prior width, preference, count and value residuals, and the distinction between exact historical turnover and rounded scenario inputs.
 \normalsize
 
 \begin{thebibliography}{9}\small

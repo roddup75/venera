@@ -75,5 +75,14 @@
     "impactA": 4.438851356522155e-17,
     "impactB": 28.027885682737395,
     "impactGamma": 0.3858429401401356
+  },
+  "countCalibration": {
+    "burrC": 6.896891466795252,
+    "burrD": 0.507561693881281,
+    "burrScale": 0.0059815326664732615,
+    "scaleElasticity": 0.4340035404401745,
+    "tailElasticity": 0.9030936737379236,
+    "fitAumMultiples": [1, 2, 4],
+    "rmsePercentagePoints": 3.344997859333502
   }
 }
