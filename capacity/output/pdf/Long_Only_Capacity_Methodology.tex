@@ -8,13 +8,13 @@
 \numberwithin{equation}{section}
 \pagestyle{fancy}\fancyhf{}
 \lhead{Long-Only Capacity Methodology}
-\rhead{Revised 29 September 2026}
+\rhead{Revised 2 October 2026}
 \cfoot{\thepage}\setlength{\headheight}{14pt}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \title{\textbf{Long-Only Equity Capacity Methodology}\\[0.4em]
 \large Distributional Liquidity Migration, Execution Horizons and Alpha Decay}
 \author{Rodrigo Dupleich\thanks{with the help of ChatGTP}}
-\date{29 September 2026}
+\date{2 October 2026}
 
 \begin{document}
 \maketitle
@@ -400,9 +400,8 @@ conservation, volume-stress equivalence and infeasible calibration inputs. Quadr
 liquidity preference and ticket-prior width require sensitivity review before operational use.
 
 \section{Running the dashboard implementations}\label{sec:running}
-The methodology is distributed through two dashboard implementations. The browser version
-evaluates the model interactively from the source parameters. The Power BI version uses generated
-scenario tables so that it can be distributed through standard Power BI files and workspaces.
+The methodology is distributed through two live dashboard implementations. The TypeScript browser
+version and the Python Streamlit version both evaluate the model interactively from the source parameters.
 Both implementations use USD, the same live bucket observations, the same universe ADV
 quantiles and the same Burr and ADV calibration inputs.
 
@@ -424,29 +423,27 @@ node --experimental-strip-types --test tests/adv-migration.test.mjs
 The browser version recalculates immediately when the user changes AUM, holdings, turnover,
 participation, execution horizon, alpha half-life or the available model-specific controls.
 
-\subsection{Power BI dashboard}
+\subsection{Streamlit dashboard}
 \begin{sloppypar}
-The portable Power BI materials are stored in the \path{powerbi} directory and in the archive
-\path{CapacityLab-PowerBI.zip}. On a Windows machine with Power BI Desktop, the archive is
-extracted and every CSV file in \texttt{powerbi/data} is imported through \emph{Get data--Text/CSV}.
-The first row is promoted to column headers. The measures in
-\path{powerbi/CapacityLab.dax} are added to the \texttt{Scenarios} table, and
-\path{powerbi/CapacityLab-theme.json} is imported through
-\emph{View--Themes--Browse for themes}. The accompanying README specifies the fields and visual
-types for the Overview, Liquidity migration and Demo building blocks pages. The completed report
-can be saved as a \texttt{.pbix} file or as a source-controlled \texttt{.pbip} project.
-
-The supplied Power BI tables cover AUM from \$0.1bn to \$15.0bn in \$0.1bn increments. They
-include the ADV-calibrated and Burr scenarios, traded-dollar and parent-order migration,
-execution outcomes, alpha-decay paths, bucket inputs, ADV percentiles and fitted calibrations.
-After changing a structural model input, the scenario tables are regenerated from the
-\texttt{dashboard} directory with
+The Streamlit implementation requires Python 3.11 or later. From the project root, create an
+isolated environment, install the declared dependencies and start the application with
 \begin{verbatim}
-node --experimental-strip-types scripts/export-powerbi.mjs
+cd streamlit
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+streamlit run app.py
 \end{verbatim}
-and the Power BI tables are refreshed. AUM, model and view selections operate as report filters;
-turnover, holdings, participation limits and fitted coefficients require regeneration because the
-Power BI implementation is a scenario grid rather than a live JavaScript calculation engine.
+On Windows PowerShell, the environment is activated with
+\verb|.venv\Scripts\Activate.ps1|. Streamlit normally opens
+\url{http://localhost:8501}; the server is stopped with \texttt{Ctrl+C}. The Streamlit version
+contains the Overview, Liquidity migration, Demo building blocks and Input data areas. It reads
+the live bucket and ADV JSON files used by the TypeScript dashboard and recalculates scenarios
+when AUM, turnover, holdings, participation, horizon, half-life or model controls change.
+The Streamlit model checks are run from its directory with
+\begin{verbatim}
+python -m unittest test_capacity_model.py
+\end{verbatim}
 \end{sloppypar}
 
 \appendix

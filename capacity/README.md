@@ -21,35 +21,39 @@ npm run build
 node --experimental-strip-types --test tests/adv-migration.test.mjs
 ```
 
-## Run the Power BI dashboard
+## Run the Streamlit dashboard
 
-The portable Power BI package is in `powerbi/`, with a single-file copy at
-`CapacityLab-PowerBI.zip`. Power BI Desktop runs on Windows.
-
-1. Extract `CapacityLab-PowerBI.zip`, or copy the `powerbi/` directory to the Windows machine.
-2. Open Power BI Desktop and choose **Get data > Text/CSV**.
-3. Import every CSV in `powerbi/data/` and promote the first row to headers.
-4. Add the measures in `powerbi/CapacityLab.dax` to the `Scenarios` table.
-5. Import `powerbi/CapacityLab-theme.json` through **View > Themes > Browse for themes**.
-6. Follow `powerbi/README.md` to build the Overview, Liquidity migration and Demo building blocks pages.
-7. Save the completed report as `CapacityLab.pbix`, or as a `.pbip` project when source-controlled Power BI project files are preferred.
-
-The Power BI version is generated on an AUM grid from $0.1bn to $15.0bn. To refresh it after changing the model inputs, run:
+Python 3.11 or later is recommended.
 
 ```sh
-cd dashboard
-node --experimental-strip-types scripts/export-powerbi.mjs
+cd streamlit
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Then refresh the imported tables in Power BI Desktop. Structural changes to turnover, holdings,
-participation limits or calibration parameters require this regeneration step; AUM, model and
-view selections remain interactive inside the report.
+On Windows PowerShell, replace the activation command with:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Streamlit normally opens http://localhost:8501. Stop the server with `Ctrl+C`.
+The Streamlit version reads the same live bucket and ADV calibration JSON files as the browser
+dashboard and recalculates the ADV and Burr models when inputs change.
+
+Run its model tests with:
+
+```sh
+cd streamlit
+python -m unittest test_capacity_model.py
+```
 
 ## Project contents
 
 - `dashboard/`: interactive capacity scenarios and model building block demos.
-- `powerbi/`: Power BI data tables, DAX measures, theme and report-building instructions.
-- `CapacityLab-PowerBI.zip`: portable copy of the Power BI package.
+- `streamlit/`: Python/Streamlit implementation of the interactive dashboard.
 - `long_only_capacity_tool.py`: Python capacity model.
 - `buckets_data_live.csv`: live bucket input data in USD.
 - `output/pdf/Long_Only_Capacity_Methodology.pdf`: updated methodology paper.

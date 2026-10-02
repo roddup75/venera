@@ -1,0 +1,164 @@
+"""Streamlit version of the Capacity Lab dashboard."""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+
+from capacity_model import (
+    ADV_POINTS, BUCKETS, LIVE, MIGRATION_LABELS, AdvEngine, BurrEngine, Scenario,
+    burr_shares, calibrate_orders, curve,
+)
+
+
+GREEN, AMBER, RUST, BLUE = "#1d6f61", "#d7a339", "#bc5a3c", "#476b87"
+PALETTE = ["#172f2a", GREEN, AMBER, RUST, BLUE, "#855594"]
+
+st.set_page_config(page_title="Capacity Lab", page_icon="◉", layout="wide")
+st.markdown("""
+<style>
+  .stApp { background: #f5f2eb; }
+  [data-testid="stMetric"] { background: white; border: 1px solid #ded8cc; border-radius: 12px; padding: 14px; }
+  h1, h2, h3 { color: #172f2a; }
+  div[data-testid="stSidebar"] { background: #eef0e9; }
+</style>
+""", unsafe_allow_html=True)
+
+
+@st.cache_data(show_spinner=False)
+def orders(preference: float) -> pd.DataFrame:
+    return calibrate_orders(preference)
+
+
+def migration_chart(values: dict[str, np.ndarray], title: str):
+    rows = [{"Participation bucket": bucket, "Scenario": name, "Share (%)": share}
+            for name, shares in values.items() for bucket, share in zip(MIGRATION_LABELS, shares)]
+    fig = px.bar(pd.DataFrame(rows), x="Participation bucket", y="Share (%)", color="Scenario", barmode="group", title=title, color_discrete_sequence=PALETTE)
+    fig.update_layout(legend_orientation="h", legend_y=1.12, paper_bgcolor="white", plot_bgcolor="white")
+    st.plotly_chart(fig, width="stretch")
+
+
+with st.sidebar:
+    st.title("Capacity Lab")
+    st.caption("Long-only equity model · USD")
+    engine_name = st.selectbox("Migration model", ["ADV-calibrated migration", "Burr migration"])
+    st.subheader("Strategy")
+    aum0 = st.number_input("Current AUM ($bn)", 0.1, 1000.0, 3.4, .1)
+    gross_alpha = st.number_input("Gross alpha (%)", 0.0, 100.0, .5, .05)
+    tracking_error = st.number_input("Tracking error (%)", .01, 100.0, 1.3, .1)
+    turnover = st.number_input("One-way turnover (%)", 0.0, 1000.0, 13.9, .1)
+    holdings = st.number_input("Average holdings", 1, 10000, 40, 1)
+    max_aum = st.number_input("Chart horizon ($bn)", 1.0, 1000.0, 15.0, 1.0)
+    st.subheader("Migration and execution")
+    daily = st.number_input("Daily participation (% ADV)", .1, 100.0, 10.0, .5)
+    max_days = st.number_input("Maximum execution days", 1, 252, 10, 1)
+    half_life = st.number_input("Alpha half-life (days)", .1, 1260.0, 10.0, 1.0)
+    adv_volume = st.number_input("Market ADV level (%)", 1.0, 300.0, 100.0, 5.0, disabled=engine_name.startswith("Burr"))
+    preference_label = st.selectbox("Liquidity preference", ["Neutral prior", "Favour liquid stocks", "Favour illiquid stocks"], disabled=engine_name.startswith("Burr"))
+    preference = {"Neutral prior": 0.0, "Favour liquid stocks": 2.0, "Favour illiquid stocks": -2.0}[preference_label]
+    eta = st.number_input("η · Scale elasticity", 0.0, 2.0, .85, .05, disabled=engine_name.startswith("ADV"))
+    kappa = st.number_input("κ · Tail thickening", 0.0, 2.0, 0.0, .05, disabled=engine_name.startswith("ADV"))
+    st.subheader("Decision thresholds")
+    minimum_ir = st.number_input("Minimum net IR", 0.0, 10.0, .4, .05)
+    retained_threshold = st.number_input("Minimum retained alpha (%)", 0.0, 100.0, 80.0, 1.0)
+
+scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_error,
+                    turnover=turnover, holdings=int(holdings), scale_elasticity=eta,
+                    tail_elasticity=kappa, daily_participation=daily, max_days=int(max_days),
+                    half_life=half_life, adv_volume=adv_volume)
+engine = AdvEngine(scenario, orders(preference)) if engine_name.startswith("ADV") else BurrEngine(scenario)
+data = curve(engine, max_aum)
+base, twice, four = [engine.metric(aum0 * x) for x in (1, 2, 4)]
+
+st.title("Analysis strategy's AUM scenarios")
+st.caption("Distributional liquidity migration, execution horizons, market impact and alpha decay")
+overview, liquidity, demo, inputs = st.tabs(["Overview", "Liquidity migration", "Demo building blocks", "Input data"])
+
+with overview:
+    cols = st.columns(4)
+    cols[0].metric("Current net IR", f"{base['Net IR']:.2f}", "Above threshold" if base["Net IR"] >= minimum_ir else "Below threshold")
+    crossing = data.loc[data["Net IR"] <= minimum_ir, "AUM"]
+    cols[1].metric("IR capacity", f"${crossing.iloc[0]:.1f}bn" if len(crossing) else f"> ${max_aum:.0f}bn")
+    cols[2].metric("Alpha capture at 2×", f"{twice['Alpha capture (%)']:.1f}%")
+    cols[3].metric("Average execution at 2×", f"{twice['Average days']:.1f} days")
+    fig = px.line(data, x="AUM", y="Net IR", title="Net information ratio", color_discrete_sequence=[GREEN])
+    fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
+    fig.update_layout(yaxis_title="Net IR", xaxis_title="AUM (USD bn)", paper_bgcolor="white", plot_bgcolor="white")
+    st.plotly_chart(fig, width="stretch")
+    alpha = data.melt(id_vars="AUM", value_vars=["After delay (%)", "Net alpha (%)"], var_name="Series", value_name="Alpha (%)")
+    fig = px.line(alpha, x="AUM", y="Alpha (%)", color="Series", title="Alpha decomposition", color_discrete_sequence=[AMBER, RUST])
+    fig.update_layout(xaxis_title="AUM (USD bn)", paper_bgcolor="white", plot_bgcolor="white")
+    st.plotly_chart(fig, width="stretch")
+    st.dataframe(pd.DataFrame([base, twice, four]).round(3), width="stretch", hide_index=True)
+    retained_cross = data.loc[data["Retained alpha (%)"] <= retained_threshold, "AUM"]
+    if len(retained_cross):
+        st.info(f"Retained alpha falls through {retained_threshold:.0f}% near ${retained_cross.iloc[0]:.1f}bn.")
+    else:
+        st.info(f"Retained alpha stays above {retained_threshold:.0f}% through ${max_aum:.0f}bn.")
+
+with liquidity:
+    aums = [aum0, aum0 * 2, aum0 * 4]
+    labels = [f"${x:.1f}bn" for x in aums]
+    view = st.radio("View", ["Traded-dollar migration", "Parent-order count migration", "Execution outcomes"], horizontal=True)
+    if view == "Traded-dollar migration":
+        migration_chart({label: engine.dollar_shares(aum) for label, aum in zip(labels, aums)}, view)
+    elif view == "Parent-order count migration":
+        if isinstance(engine, AdvEngine):
+            migration_chart({label: engine.count_shares(aum) for label, aum in zip(labels, aums)}, view)
+        else:
+            migration_chart({label: burr_shares(aum, scenario, count_fit=True) for label, aum in zip(labels, aums)}, "Count-calibrated Burr migration")
+    else:
+        if isinstance(engine, AdvEngine):
+            outcome_labels = ["Completed in 1 day", "Completed in 2–5 days", "Completed in 6+ days", "Beyond maximum horizon"]
+            rows = [{"Execution outcome": outcome, "Scenario": label, "Parent orders (%)": share}
+                    for label, aum in zip(labels, aums) for outcome, share in zip(outcome_labels, engine.execution_shares(aum))]
+            fig = px.bar(pd.DataFrame(rows), x="Execution outcome", y="Parent orders (%)", color="Scenario", barmode="group", color_discrete_sequence=PALETTE)
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.info("Execution-outcome counts require the ADV-calibrated parent-order engine.")
+    st.caption("Participation buckets are defined by total parent-order value divided by ADV. Daily participation changes execution outcomes, not the parent-order bucket.")
+
+with demo:
+    migration_demo, impact_demo, alpha_demo = st.tabs(["1. Liquidity migration", "2. Impact model", "3. Alpha decay"])
+    with migration_demo:
+        st.subheader("Count-calibrated Burr migration")
+        c1, c2 = st.columns(2)
+        demo_eta = c1.slider("η · Scale elasticity", 0.0, 2.0, float(LIVE["countCalibration"]["scaleElasticity"]), .05)
+        demo_kappa = c2.slider("κ · Tail thickening", 0.0, 2.0, float(LIVE["countCalibration"]["tailElasticity"]), .05)
+        migration_chart({label: burr_shares(aum, scenario, count_fit=True, eta=demo_eta, kappa=demo_kappa) for label, aum in zip(labels, aums)}, "Parent-order count migration")
+        fit = LIVE["countCalibration"]
+        st.caption(f"Count fit: c={fit['burrC']:.3f}, d={fit['burrD']:.3f}, λ₀={fit['burrScale']:.4f}; joint RMSE={fit['rmsePercentagePoints']:.2f} percentage points.")
+    with impact_demo:
+        st.subheader("Impact model")
+        c1, c2, c3 = st.columns(3)
+        a = c1.number_input("a", value=float(scenario.impact_a), format="%.4f")
+        b = c2.number_input("b", value=float(scenario.impact_b), format="%.4f")
+        gamma = c3.number_input("γ", value=float(scenario.impact_gamma), min_value=.01, max_value=3.0, step=.05)
+        p = np.linspace(0, 1, 201)
+        fig = go.Figure()
+        fig.add_scatter(x=p * 100, y=a + b * p ** gamma, mode="lines", name="Fitted impact", line_color=GREEN)
+        fig.add_scatter(x=BUCKETS.p * 100, y=BUCKETS.cost, mode="markers", name="Expected buckets", marker_color=AMBER, marker_size=10)
+        fig.add_scatter(x=BUCKETS.p * 100, y=BUCKETS.realised, mode="markers", name="Realised buckets", marker_color=RUST, marker_size=10)
+        fig.update_layout(xaxis_title="Participation (% ADV)", yaxis_title="Impact (bp)", paper_bgcolor="white", plot_bgcolor="white")
+        st.plotly_chart(fig, width="stretch")
+        st.latex(r"c(p)=a+b p^{\gamma}")
+    with alpha_demo:
+        st.subheader("Alpha decay over six months")
+        h = st.slider("Half-life (days)", 1, 126, int(round(half_life)))
+        days = np.arange(127)
+        alpha = pd.DataFrame({"Day": days, "Remaining gross alpha (%)": gross_alpha * 2 ** (-days / h)})
+        fig = px.line(alpha, x="Day", y="Remaining gross alpha (%)", color_discrete_sequence=[GREEN])
+        fig.update_layout(paper_bgcolor="white", plot_bgcolor="white")
+        st.plotly_chart(fig, width="stretch")
+        st.latex(r"R_g(t)=R_g(0)\,2^{-t/H_{\alpha}}")
+
+with inputs:
+    st.subheader("Liquidity calibration inputs")
+    display = BUCKETS.rename(columns={"label": "Participation bucket", "trades": "Parent orders", "valueUsdMillion": "Value (USD m)", "share": "Notional share (%)", "cost": "Expected impact (bp)", "realised": "Realised impact (bp)"})
+    st.dataframe(display[["Participation bucket", "Parent orders", "Value (USD m)", "Notional share (%)", "Expected impact (bp)", "Realised impact (bp)"]], width="stretch", hide_index=True)
+    st.subheader("Trading-universe ADV distribution")
+    adv_display = ADV_POINTS.rename(columns={"percentile": "Percentile", "advUsd": "ADV (USD)"})
+    st.dataframe(adv_display, width="stretch", hide_index=True)
