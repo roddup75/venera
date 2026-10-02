@@ -14,16 +14,28 @@ from capacity_model import (
 )
 
 
-GREEN, AMBER, RUST, BLUE = "#1d6f61", "#d7a339", "#bc5a3c", "#476b87"
-PALETTE = ["#172f2a", GREEN, AMBER, RUST, BLUE, "#855594"]
+GREEN, AMBER, RUST, BLUE = "#42c7a5", "#f4bd50", "#ef7658", "#76a9d0"
+PALETTE = ["#b8f2e3", GREEN, AMBER, RUST, BLUE, "#c698db"]
+PAGE_BG, PANEL_BG, TEXT, GRID = "#050505", "#111111", "#f2f4f3", "#303432"
 
 st.set_page_config(page_title="Capacity Lab", page_icon="◉", layout="wide")
 st.markdown("""
 <style>
-  .stApp { background: #f5f2eb; }
-  [data-testid="stMetric"] { background: white; border: 1px solid #ded8cc; border-radius: 12px; padding: 14px; }
-  h1, h2, h3 { color: #172f2a; }
-  div[data-testid="stSidebar"] { background: #eef0e9; }
+  .stApp, [data-testid="stAppViewContainer"] { background: #050505; color: #f2f4f3; }
+  [data-testid="stHeader"] { background: rgba(5, 5, 5, 0.88); }
+  [data-testid="stMetric"] {
+    background: #111111;
+    border: 1px solid #303432;
+    border-radius: 12px;
+    padding: 14px;
+  }
+  [data-testid="stMetricLabel"], [data-testid="stMetricValue"],
+  [data-testid="stMetricDelta"], h1, h2, h3, p, label { color: #f2f4f3; }
+  div[data-testid="stSidebar"] { background: #0c0d0d; border-right: 1px solid #262927; }
+  div[data-testid="stTabs"] button { color: #c8cfcc; }
+  div[data-testid="stTabs"] button[aria-selected="true"] { color: #42c7a5; }
+  [data-testid="stDataFrame"] { border: 1px solid #303432; border-radius: 8px; }
+  div[data-testid="stAlert"] { background: #111b18; color: #f2f4f3; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -33,12 +45,28 @@ def orders(preference: float) -> pd.DataFrame:
     return calibrate_orders(preference)
 
 
+def style_figure(fig: go.Figure) -> go.Figure:
+    """Apply a high-contrast dark theme consistently to every Plotly chart."""
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor=PAGE_BG,
+        plot_bgcolor=PANEL_BG,
+        font_color=TEXT,
+        title_font_color=TEXT,
+        legend_bgcolor="rgba(17,17,17,0.85)",
+        hoverlabel=dict(bgcolor="#1a1d1b", font_color=TEXT),
+    )
+    fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID, linecolor="#555b58")
+    fig.update_yaxes(gridcolor=GRID, zerolinecolor=GRID, linecolor="#555b58")
+    return fig
+
+
 def migration_chart(values: dict[str, np.ndarray], title: str):
     rows = [{"Participation bucket": bucket, "Scenario": name, "Share (%)": share}
             for name, shares in values.items() for bucket, share in zip(MIGRATION_LABELS, shares)]
     fig = px.bar(pd.DataFrame(rows), x="Participation bucket", y="Share (%)", color="Scenario", barmode="group", title=title, color_discrete_sequence=PALETTE)
-    fig.update_layout(legend_orientation="h", legend_y=1.12, paper_bgcolor="white", plot_bgcolor="white")
-    st.plotly_chart(fig, width="stretch")
+    fig.update_layout(legend_orientation="h", legend_y=1.12)
+    st.plotly_chart(style_figure(fig), width="stretch")
 
 
 with st.sidebar:
@@ -86,12 +114,12 @@ with overview:
     cols[3].metric("Average execution at 2×", f"{twice['Average days']:.1f} days")
     fig = px.line(data, x="AUM", y="Net IR", title="Net information ratio", color_discrete_sequence=[GREEN])
     fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
-    fig.update_layout(yaxis_title="Net IR", xaxis_title="AUM (USD bn)", paper_bgcolor="white", plot_bgcolor="white")
-    st.plotly_chart(fig, width="stretch")
+    fig.update_layout(yaxis_title="Net IR", xaxis_title="AUM (USD bn)")
+    st.plotly_chart(style_figure(fig), width="stretch")
     alpha = data.melt(id_vars="AUM", value_vars=["After delay (%)", "Net alpha (%)"], var_name="Series", value_name="Alpha (%)")
     fig = px.line(alpha, x="AUM", y="Alpha (%)", color="Series", title="Alpha decomposition", color_discrete_sequence=[AMBER, RUST])
-    fig.update_layout(xaxis_title="AUM (USD bn)", paper_bgcolor="white", plot_bgcolor="white")
-    st.plotly_chart(fig, width="stretch")
+    fig.update_layout(xaxis_title="AUM (USD bn)")
+    st.plotly_chart(style_figure(fig), width="stretch")
     st.dataframe(pd.DataFrame([base, twice, four]).round(3), width="stretch", hide_index=True)
     retained_cross = data.loc[data["Retained alpha (%)"] <= retained_threshold, "AUM"]
     if len(retained_cross):
@@ -116,7 +144,7 @@ with liquidity:
             rows = [{"Execution outcome": outcome, "Scenario": label, "Parent orders (%)": share}
                     for label, aum in zip(labels, aums) for outcome, share in zip(outcome_labels, engine.execution_shares(aum))]
             fig = px.bar(pd.DataFrame(rows), x="Execution outcome", y="Parent orders (%)", color="Scenario", barmode="group", color_discrete_sequence=PALETTE)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(style_figure(fig), width="stretch")
         else:
             st.info("Execution-outcome counts require the ADV-calibrated parent-order engine.")
     st.caption("Participation buckets are defined by total parent-order value divided by ADV. Daily participation changes execution outcomes, not the parent-order bucket.")
@@ -142,8 +170,8 @@ with demo:
         fig.add_scatter(x=p * 100, y=a + b * p ** gamma, mode="lines", name="Fitted impact", line_color=GREEN)
         fig.add_scatter(x=BUCKETS.p * 100, y=BUCKETS.cost, mode="markers", name="Expected buckets", marker_color=AMBER, marker_size=10)
         fig.add_scatter(x=BUCKETS.p * 100, y=BUCKETS.realised, mode="markers", name="Realised buckets", marker_color=RUST, marker_size=10)
-        fig.update_layout(xaxis_title="Participation (% ADV)", yaxis_title="Impact (bp)", paper_bgcolor="white", plot_bgcolor="white")
-        st.plotly_chart(fig, width="stretch")
+        fig.update_layout(xaxis_title="Participation (% ADV)", yaxis_title="Impact (bp)")
+        st.plotly_chart(style_figure(fig), width="stretch")
         st.latex(r"c(p)=a+b p^{\gamma}")
     with alpha_demo:
         st.subheader("Alpha decay over six months")
@@ -151,8 +179,7 @@ with demo:
         days = np.arange(127)
         alpha = pd.DataFrame({"Day": days, "Remaining gross alpha (%)": gross_alpha * 2 ** (-days / h)})
         fig = px.line(alpha, x="Day", y="Remaining gross alpha (%)", color_discrete_sequence=[GREEN])
-        fig.update_layout(paper_bgcolor="white", plot_bgcolor="white")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(style_figure(fig), width="stretch")
         st.latex(r"R_g(t)=R_g(0)\,2^{-t/H_{\alpha}}")
 
 with inputs:
