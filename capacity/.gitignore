@@ -11,3 +11,4 @@ node_modules/
 .wrangler/
 dist/
 *.log
+streamlit/data/strategies.user.json

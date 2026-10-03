@@ -42,6 +42,8 @@ On Windows PowerShell, replace the activation command with:
 Streamlit normally opens http://localhost:8501. Stop the server with `Ctrl+C`.
 The Streamlit version reads the same live bucket and ADV calibration JSON files as the browser
 dashboard and recalculates the ADV and Burr models when inputs change.
+Its Strategy creator saves model defaults, liquidity buckets and ADV distributions as named cases;
+select a saved case from the sidebar to load it throughout the Capacity Lab.
 
 Run its model tests with:
 

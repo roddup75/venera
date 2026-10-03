@@ -41,9 +41,10 @@ class Scenario:
     impact_gamma: float = LIVE["calibration"]["impactGamma"]
 
 
-def adv_at(q: float) -> float:
-    percentiles = ADV_POINTS["percentile"].to_numpy(float)
-    values = ADV_POINTS["advUsd"].to_numpy(float)
+def adv_at(q: float, adv_points: pd.DataFrame | None = None) -> float:
+    points = ADV_POINTS if adv_points is None else adv_points
+    percentiles = points["percentile"].to_numpy(float)
+    values = points["advUsd"].to_numpy(float)
     target = q * 100
     hi = int(np.searchsorted(percentiles, target, side="left"))
     if hi <= 0:
@@ -54,14 +55,20 @@ def adv_at(q: float) -> float:
     return float(np.exp(np.log(values[hi - 1]) * (1 - t) + np.log(values[hi]) * t))
 
 
-def calibrate_orders(preference: float = 0.0) -> pd.DataFrame:
+def calibrate_orders(
+    preference: float = 0.0,
+    buckets: pd.DataFrame | None = None,
+    adv_points: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    bucket_data = BUCKETS if buckets is None else buckets.reset_index(drop=True)
+    points = ADV_POINTS if adv_points is None else adv_points.reset_index(drop=True)
     rows: list[dict] = []
-    for bucket, b in BUCKETS.iterrows():
+    for bucket, b in bucket_data.iterrows():
         mean = b.valueUsdMillion * 1e6 / b.trades
         cells = []
         for j in range(100):
             q = (j + 0.5) / 100
-            adv = adv_at(q)
+            adv = adv_at(q, points)
             for k in range(16):
                 participation = b.lower + (b.upper - b.lower) * (k + 0.5) / 16
                 ticket = participation * adv
@@ -104,16 +111,26 @@ def alpha_capture(days: np.ndarray | float, half_life: float) -> np.ndarray:
 
 
 class AdvEngine:
-    def __init__(self, scenario: Scenario, orders: pd.DataFrame):
+    def __init__(
+        self,
+        scenario: Scenario,
+        orders: pd.DataFrame,
+        buckets: pd.DataFrame | None = None,
+        anchor_aum: float = HISTORICAL_AUM / 1e9,
+        anchor_holdings: int = HISTORICAL_HOLDINGS,
+    ):
         self.p = scenario
         self.orders = orders
-        self.base_value = float((BUCKETS.valueUsdMillion * 1e6).sum())
-        self.historical_turnover = self.base_value / (2 * HISTORICAL_AUM)
+        self.buckets = (BUCKETS if buckets is None else buckets).reset_index(drop=True)
+        self.anchor_aum = max(float(anchor_aum), 0.0001)
+        self.anchor_holdings = max(int(anchor_holdings), 1)
+        self.base_value = float((self.buckets.valueUsdMillion * 1e6).sum())
+        self.historical_turnover = self.base_value / (2 * self.anchor_aum * 1e9)
         self.rho = max(scenario.daily_participation / 100, 0.0001)
         self.horizon = max(1, int(scenario.max_days))
         base = self._distribution(scenario.aum0)
         self.base_alpha = max(base["alpha_raw"], 1e-12)
-        observed = float(np.average(BUCKETS.cost, weights=BUCKETS.valueUsdMillion))
+        observed = float(np.average(self.buckets.cost, weights=self.buckets.valueUsdMillion))
         self.cost_scale = observed / max(base["cost_raw"], 1e-12)
 
     def _execution(self, participation: np.ndarray) -> tuple[np.ndarray, ...]:
@@ -125,15 +142,15 @@ class AdvEngine:
         return required, days, fraction, alpha, cost
 
     def _distribution(self, aum_bn: float) -> dict:
-        size = max(aum_bn, 0.0001) * 1e9 / HISTORICAL_AUM * HISTORICAL_HOLDINGS / max(self.p.holdings, 1)
-        frequency = max(self.p.holdings, 1) / HISTORICAL_HOLDINGS * max(self.p.turnover, 0) / 100 / self.historical_turnover
+        size = max(aum_bn, 0.0001) / self.anchor_aum * self.anchor_holdings / max(self.p.holdings, 1)
+        frequency = max(self.p.holdings, 1) / self.anchor_holdings * max(self.p.turnover, 0) / 100 / self.historical_turnover
         ticket = self.orders.ticket.to_numpy() * size
         adv = self.orders.adv.to_numpy() * max(self.p.adv_volume, 0.01) / 100
         count = self.orders["count"].to_numpy() * frequency
         participation = ticket / adv
-        bucket = np.searchsorted(BUCKETS.upper.to_numpy(), participation, side="left")
-        counts = np.bincount(bucket, weights=count, minlength=len(BUCKETS) + 1)
-        values = np.bincount(bucket, weights=ticket * count, minlength=len(BUCKETS) + 1)
+        bucket = np.searchsorted(self.buckets.upper.to_numpy(), participation, side="left")
+        counts = np.bincount(bucket, weights=count, minlength=len(self.buckets) + 1)
+        values = np.bincount(bucket, weights=ticket * count, minlength=len(self.buckets) + 1)
         required, _, fraction, alpha, cost = self._execution(participation)
         historical_weights = self.orders.ticket.to_numpy() * self.orders["count"].to_numpy() / self.base_value
         return {
@@ -200,25 +217,34 @@ def burr_ppf(q: np.ndarray, c: float, d: float, scale: float) -> np.ndarray:
     return scale * ((1 - q) ** (-1 / d) - 1) ** (1 / c)
 
 
-def burr_shares(aum_bn: float, scenario: Scenario, count_fit: bool = False, eta: float | None = None, kappa: float | None = None) -> np.ndarray:
+def burr_shares(
+    aum_bn: float,
+    scenario: Scenario,
+    count_fit: bool = False,
+    eta: float | None = None,
+    kappa: float | None = None,
+    buckets: pd.DataFrame | None = None,
+) -> np.ndarray:
     fit = LIVE["countCalibration"] if count_fit else {"burrC": scenario.burr_c, "burrD": scenario.burr_d, "burrScale": scenario.burr_scale, "scaleElasticity": scenario.scale_elasticity, "tailElasticity": scenario.tail_elasticity}
     ratio = aum_bn / scenario.aum0
     e = fit["scaleElasticity"] if eta is None else eta
     k = fit["tailElasticity"] if kappa is None else kappa
     scale = fit["burrScale"] * ratio ** e
     d = fit["burrD"] * ratio ** -k
-    edges = [0, *BUCKETS.upper.tolist(), np.inf]
+    bucket_data = BUCKETS if buckets is None else buckets
+    edges = [0, *bucket_data.upper.tolist(), np.inf]
     return np.array([(burr_cdf(edges[i + 1], fit["burrC"], d, scale) - burr_cdf(edges[i], fit["burrC"], d, scale)) * 100 for i in range(len(edges) - 1)])
 
 
 class BurrEngine:
-    def __init__(self, scenario: Scenario):
+    def __init__(self, scenario: Scenario, buckets: pd.DataFrame | None = None):
         self.p = scenario
+        self.buckets = (BUCKETS if buckets is None else buckets).reset_index(drop=True)
         self.q = (np.arange(700) + 0.5) / 700
         self.base = burr_ppf(self.q, scenario.burr_c, scenario.burr_d, scenario.burr_scale)
         self.base_days = np.minimum(scenario.max_days, np.maximum(1, np.ceil(self.base / (scenario.daily_participation / 100))))
         self.base_capture = alpha_capture(self.base_days, scenario.half_life)
-        observed = float(np.average(BUCKETS.cost, weights=BUCKETS.share))
+        observed = float(np.average(self.buckets.cost, weights=self.buckets.share))
         raw = np.mean(self._cost(self.base))
         self.impact_scale = observed / max(raw, 1e-12)
 
@@ -248,7 +274,7 @@ class BurrEngine:
         }
 
     def dollar_shares(self, aum_bn: float) -> np.ndarray:
-        return burr_shares(aum_bn, self.p)
+        return burr_shares(aum_bn, self.p, buckets=self.buckets)
 
 
 def curve(engine, maximum: float) -> pd.DataFrame:
