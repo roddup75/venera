@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -204,13 +206,67 @@ with liquidity:
 with demo:
     migration_demo, impact_demo, alpha_demo = st.tabs(["1. Liquidity migration", "2. Impact model", "3. Alpha decay"])
     with migration_demo:
-        st.subheader("Count-calibrated Burr migration")
-        c1, c2 = st.columns(2)
-        demo_eta = c1.slider("η · Scale elasticity", 0.0, 2.0, float(LIVE["countCalibration"]["scaleElasticity"]), .05)
-        demo_kappa = c2.slider("κ · Tail thickening", 0.0, 2.0, float(LIVE["countCalibration"]["tailElasticity"]), .05)
-        migration_chart({label: burr_shares(aum, scenario, count_fit=True, eta=demo_eta, kappa=demo_kappa) for label, aum in zip(labels, aums)}, "Parent-order count migration")
-        fit = LIVE["countCalibration"]
-        st.caption(f"Count fit: c={fit['burrC']:.3f}, d={fit['burrD']:.3f}, λ₀={fit['burrScale']:.4f}; joint RMSE={fit['rmsePercentagePoints']:.2f} percentage points.")
+        aum_calibrated_demo, burr_count_demo = st.tabs(["AUM-calibrated migration", "Count-calibrated Burr"])
+        with aum_calibrated_demo:
+            st.subheader("AUM-calibrated liquidity migration")
+            st.write(
+                "Compare two portfolio sizes using the observed parent-order buckets and the one-year "
+                "ADV distribution. These controls are independent of the main capacity case."
+            )
+            c1, c2 = st.columns(2)
+            demo_aum_1 = c1.number_input("AUM 1 ($bn)", .01, 1000.0, float(aum0), .1, key="demo_aum_1")
+            demo_aum_2 = c2.number_input("AUM 2 ($bn)", .01, 1000.0, float(aum0 * 2), .1, key="demo_aum_2")
+            c1, c2, c3 = st.columns(3)
+            demo_holdings = c1.number_input("Average holdings", 1, 203, int(holdings), 1, key="demo_aum_holdings")
+            demo_adv_volume = c2.number_input("Market ADV level (%)", 1.0, 300.0, 100.0, 5.0, key="demo_aum_adv")
+            demo_preference_label = c3.selectbox(
+                "Liquidity preference",
+                ["Neutral prior", "Favour liquid stocks", "Favour illiquid stocks"],
+                key="demo_aum_preference",
+            )
+            demo_preference = {
+                "Neutral prior": 0.0,
+                "Favour liquid stocks": 2.0,
+                "Favour illiquid stocks": -2.0,
+            }[demo_preference_label]
+            demo_scenario = replace(
+                scenario,
+                holdings=int(demo_holdings),
+                adv_volume=float(demo_adv_volume),
+            )
+            demo_engine = AdvEngine(demo_scenario, orders(demo_preference))
+            demo_aums = [float(demo_aum_1), float(demo_aum_2)]
+            demo_labels = [f"AUM {index + 1} · ${value:.2f}bn" for index, value in enumerate(demo_aums)]
+            migration_chart(
+                {label: demo_engine.dollar_shares(value) for label, value in zip(demo_labels, demo_aums)},
+                "Traded-dollar migration",
+            )
+            migration_chart(
+                {label: demo_engine.count_shares(value) for label, value in zip(demo_labels, demo_aums)},
+                "Parent-order count migration",
+            )
+            dollar_sets = [demo_engine.dollar_shares(value) for value in demo_aums]
+            count_sets = [demo_engine.count_shares(value) for value in demo_aums]
+            comparison = pd.DataFrame({
+                "Participation bucket": MIGRATION_LABELS,
+                f"AUM 1 · dollars (%)": dollar_sets[0],
+                f"AUM 2 · dollars (%)": dollar_sets[1],
+                f"AUM 1 · orders (%)": count_sets[0],
+                f"AUM 2 · orders (%)": count_sets[1],
+            })
+            st.dataframe(comparison.round(2), width="stretch", hide_index=True)
+            st.caption(
+                "Parent-order size scales with AUM and inversely with holdings. Market ADV and the "
+                "liquidity preference determine where those orders fall in the participation buckets."
+            )
+        with burr_count_demo:
+            st.subheader("Count-calibrated Burr migration")
+            c1, c2 = st.columns(2)
+            demo_eta = c1.slider("η · Scale elasticity", 0.0, 2.0, float(LIVE["countCalibration"]["scaleElasticity"]), .05)
+            demo_kappa = c2.slider("κ · Tail thickening", 0.0, 2.0, float(LIVE["countCalibration"]["tailElasticity"]), .05)
+            migration_chart({label: burr_shares(aum, scenario, count_fit=True, eta=demo_eta, kappa=demo_kappa) for label, aum in zip(labels, aums)}, "Parent-order count migration")
+            fit = LIVE["countCalibration"]
+            st.caption(f"Count fit: c={fit['burrC']:.3f}, d={fit['burrD']:.3f}, λ₀={fit['burrScale']:.4f}; joint RMSE={fit['rmsePercentagePoints']:.2f} percentage points.")
     with impact_demo:
         st.subheader("Impact model")
         c1, c2, c3 = st.columns(3)
