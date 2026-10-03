@@ -61,6 +61,26 @@ def style_figure(fig: go.Figure) -> go.Figure:
     return fig
 
 
+def add_aum_markers(fig: go.Figure, markers: list[dict[str, float | str]], max_aum: float) -> go.Figure:
+    """Add optional external AUM reference lines without changing the chart range."""
+    positions = ["top left", "top right"]
+    for index, marker in enumerate(markers):
+        value = float(marker["value"])
+        if 0.1 <= value <= max_aum:
+            fig.add_vline(
+                x=value,
+                line_width=2,
+                line_dash=str(marker["dash"]),
+                line_color=str(marker["color"]),
+                annotation_text=f"{marker['label']} · ${value:g}bn",
+                annotation_position=positions[index % len(positions)],
+                annotation_font_color=str(marker["color"]),
+                annotation_bgcolor="rgba(5,5,5,0.82)",
+                annotation_borderpad=4,
+            )
+    return fig
+
+
 def migration_chart(values: dict[str, np.ndarray], title: str):
     rows = [{"Participation bucket": bucket, "Scenario": name, "Share (%)": share}
             for name, shares in values.items() for bucket, share in zip(MIGRATION_LABELS, shares)]
@@ -92,6 +112,36 @@ with st.sidebar:
     st.subheader("Decision thresholds")
     minimum_ir = st.number_input("Minimum net IR", 0.0, 10.0, .4, .05)
     retained_threshold = st.number_input("Minimum retained alpha (%)", 0.0, 100.0, 80.0, 1.0)
+    st.subheader("Display markers")
+    regulatory_raw = st.text_input("Implied regulatory AUM ($bn)", placeholder="Not set")
+    competition_raw = st.text_input("Median competition AUM ($bn)", placeholder="Not set")
+    st.caption("Optional reference lines on both Overview charts. Enter values in USD billions.")
+
+
+def parse_marker(raw: str, label: str, color: str, dash: str) -> tuple[dict[str, float | str] | None, str | None]:
+    if not raw.strip():
+        return None, None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None, f"{label} must be a positive number."
+    if not np.isfinite(value) or value <= 0:
+        return None, f"{label} must be a positive number."
+    return {"label": label, "value": value, "color": color, "dash": dash}, None
+
+
+regulatory_marker, regulatory_error = parse_marker(regulatory_raw, "Implied regulatory AUM", BLUE, "dash")
+competition_marker, competition_error = parse_marker(competition_raw, "Median competition", "#c698db", "dot")
+aum_markers = [marker for marker in (regulatory_marker, competition_marker) if marker is not None]
+for marker_error in (regulatory_error, competition_error):
+    if marker_error:
+        st.sidebar.warning(marker_error)
+outside_markers = [marker for marker in aum_markers if float(marker["value"]) > max_aum]
+if outside_markers:
+    st.sidebar.info(
+        "Outside chart horizon: "
+        + ", ".join(f"{marker['label']} (${float(marker['value']):g}bn)" for marker in outside_markers)
+    )
 
 scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_error,
                     turnover=turnover, holdings=int(holdings), scale_elasticity=eta,
@@ -114,10 +164,12 @@ with overview:
     cols[3].metric("Average execution at 2×", f"{twice['Average days']:.1f} days")
     fig = px.line(data, x="AUM", y="Net IR", title="Net information ratio", color_discrete_sequence=[GREEN])
     fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
+    add_aum_markers(fig, aum_markers, max_aum)
     fig.update_layout(yaxis_title="Net IR", xaxis_title="AUM (USD bn)")
     st.plotly_chart(style_figure(fig), width="stretch")
     alpha = data.melt(id_vars="AUM", value_vars=["After delay (%)", "Net alpha (%)"], var_name="Series", value_name="Alpha (%)")
     fig = px.line(alpha, x="AUM", y="Alpha (%)", color="Series", title="Alpha decomposition", color_discrete_sequence=[AMBER, RUST])
+    add_aum_markers(fig, aum_markers, max_aum)
     fig.update_layout(xaxis_title="AUM (USD bn)")
     st.plotly_chart(style_figure(fig), width="stretch")
     st.dataframe(pd.DataFrame([base, twice, four]).round(3), width="stretch", hide_index=True)
