@@ -391,6 +391,12 @@ with demo:
         st.latex(r"c(p)=a+b p^{\gamma}")
     with alpha_demo:
         st.subheader("Alpha decay over six months")
+        st.info(
+            "Alpha decay is applied to each parent order before portfolio aggregation. One-day "
+            "orders have full delay capture; multi-day orders and unfinished notional reduce "
+            "captured gross alpha. The model then subtracts impact costs and divides net alpha "
+            "by tracking error to obtain net IR. Capture is normalized to the current-AUM case."
+        )
         h = st.slider("Half-life (days)", 1, 126, int(round(half_life)))
         days = np.arange(127)
         alpha = pd.DataFrame({"Day": days, "Remaining gross alpha (%)": gross_alpha * 2 ** (-days / h)})

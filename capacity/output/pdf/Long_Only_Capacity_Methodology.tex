@@ -237,6 +237,16 @@ contributes zero captured alpha. The engine normalises the aggregate capture to 
 aggregate, rather than averaging the individual ratios used by Burr. The resulting equation is
 specified below.
 
+\paragraph{Interpretive note: where decay is applied.}
+Alpha decay is evaluated parent order by parent order, not applied directly to portfolio IR.
+A one-day order has $g(1,H_\alpha)=1$ and therefore no delay loss under this convention.
+Multi-day orders have $g(D,H_\alpha)<1$, while the ADV branch also removes the alpha associated
+with unfinished notional through $e_k$. These order-level capture terms are aggregated into
+after-delay gross alpha. Market-impact drag is then deducted to obtain net alpha, and net alpha
+is divided by tracking error to obtain net IR. Because capture is normalised to the historical
+current-AUM implementation, the capacity curve measures additional delay loss relative to that
+reference rather than the absolute delay already embedded in the historical portfolio.
+
 \section{Net capacity}\label{sec:net}
 \subsection{Burr implementation}
 The participation distribution specified in Section~\ref{sec:migration} determines $p_A(q)$
