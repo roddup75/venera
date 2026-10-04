@@ -221,7 +221,7 @@ with st.sidebar:
         "Impact γ", .01, 10.0, float(saved["impact_gamma"]), .05,
         key=main_key + "impact_gamma", help="Curvature of impact versus participation; values above one make the curve convex.",
     )
-    st.caption("The live bucket costs anchor the current-AUM cost level; a, b, and γ control how impact changes with participation and AUM.")
+    st.caption("The saved a, b, and γ values reproduce the live-cost calibration. Editing them changes both current and projected impact without recalibrating the result.")
     st.subheader("Decision thresholds")
     minimum_ir = st.number_input("Minimum net IR", 0.0, 10.0, float(saved["minimum_ir"]), .05, key=main_key + "minimum_ir")
     retained_threshold = st.number_input("Minimum retained alpha (%)", 0.0, 100.0, float(saved["retained_threshold"]), 1.0, key=main_key + "retained_threshold")
@@ -282,11 +282,17 @@ scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_
                     burr_c=burr_c, burr_d=burr_d, burr_scale=burr_scale,
                     impact_a=impact_a, impact_b=impact_b, impact_gamma=impact_gamma)
 selected_orders = orders(preference, strategy_buckets, strategy_adv_points, int(universe_size))
+impact_reference = (
+    float(saved["impact_a"]), float(saved["impact_b"]), float(saved["impact_gamma"]),
+)
 engine = (AdvEngine(
               scenario, selected_orders, strategy_buckets,
               anchor_aum=float(saved["aum0"]), anchor_holdings=int(saved["holdings"]),
+              impact_reference=impact_reference,
           )
-          if engine_name.startswith("ADV") else BurrEngine(scenario, strategy_buckets))
+          if engine_name.startswith("ADV") else BurrEngine(
+              scenario, strategy_buckets, impact_reference=impact_reference,
+          ))
 data = curve(engine, max_aum)
 base, twice, four = [engine.metric(aum0 * x) for x in (1, 2, 4)]
 

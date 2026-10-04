@@ -122,6 +122,7 @@ class AdvEngine:
         buckets: pd.DataFrame | None = None,
         anchor_aum: float = HISTORICAL_AUM / 1e9,
         anchor_holdings: int = HISTORICAL_HOLDINGS,
+        impact_reference: tuple[float, float, float] | None = None,
     ):
         self.p = scenario
         self.orders = orders
@@ -132,20 +133,35 @@ class AdvEngine:
         self.historical_turnover = self.base_value / (2 * self.anchor_aum * 1e9)
         self.rho = max(scenario.daily_participation / 100, 0.0001)
         self.horizon = max(1, int(scenario.max_days))
+        self.impact_reference = impact_reference or (
+            scenario.impact_a, scenario.impact_b, scenario.impact_gamma,
+        )
         base = self._distribution(scenario.aum0)
         self.base_alpha = max(base["alpha_raw"], 1e-12)
         observed = float(np.average(self.buckets.cost, weights=self.buckets.valueUsdMillion))
-        self.cost_scale = observed / max(base["cost_raw"], 1e-12)
+        reference = self._distribution(scenario.aum0, self.impact_reference)
+        self.cost_scale = observed / max(reference["cost_raw"], 1e-12)
 
-    def _execution(self, participation: np.ndarray) -> tuple[np.ndarray, ...]:
+    def _execution(
+        self,
+        participation: np.ndarray,
+        impact_parameters: tuple[float, float, float] | None = None,
+    ) -> tuple[np.ndarray, ...]:
         required = np.maximum(1, np.ceil(participation / self.rho)).astype(int)
         days = np.minimum(self.horizon, required)
         fraction = np.minimum(1, self.horizon * self.rho / np.maximum(participation, 1e-12))
         alpha = fraction * alpha_capture(days, self.p.half_life)
-        cost = self.p.impact_a + self.p.impact_b * np.minimum(participation, self.rho) ** self.p.impact_gamma
+        a, b, gamma = impact_parameters or (
+            self.p.impact_a, self.p.impact_b, self.p.impact_gamma,
+        )
+        cost = a + b * np.minimum(participation, self.rho) ** gamma
         return required, days, fraction, alpha, cost
 
-    def _distribution(self, aum_bn: float) -> dict:
+    def _distribution(
+        self,
+        aum_bn: float,
+        impact_parameters: tuple[float, float, float] | None = None,
+    ) -> dict:
         holdings = min(max(self.p.holdings, 1), max(self.p.universe_size, 1))
         aum_ratio = max(aum_bn, 0.0001) / self.anchor_aum
         size = aum_ratio * self.anchor_holdings / holdings
@@ -158,7 +174,7 @@ class AdvEngine:
         bucket = np.searchsorted(self.buckets.upper.to_numpy(), participation, side="left")
         counts = np.bincount(bucket, weights=count, minlength=len(self.buckets) + 1)
         values = np.bincount(bucket, weights=ticket * count, minlength=len(self.buckets) + 1)
-        required, _, fraction, alpha, cost = self._execution(participation)
+        required, _, fraction, alpha, cost = self._execution(participation, impact_parameters)
         historical_weights = self.orders.ticket.to_numpy() * self.orders["count"].to_numpy() / self.base_value
         count_total = float(count.sum())
         average_execution_days = (
@@ -258,7 +274,12 @@ def burr_shares(
 
 
 class BurrEngine:
-    def __init__(self, scenario: Scenario, buckets: pd.DataFrame | None = None):
+    def __init__(
+        self,
+        scenario: Scenario,
+        buckets: pd.DataFrame | None = None,
+        impact_reference: tuple[float, float, float] | None = None,
+    ):
         self.p = scenario
         self.buckets = (BUCKETS if buckets is None else buckets).reset_index(drop=True)
         self.q = (np.arange(700) + 0.5) / 700
@@ -266,11 +287,21 @@ class BurrEngine:
         self.base_days = np.minimum(scenario.max_days, np.maximum(1, np.ceil(self.base / (scenario.daily_participation / 100))))
         self.base_capture = alpha_capture(self.base_days, scenario.half_life)
         observed = float(np.average(self.buckets.cost, weights=self.buckets.share))
-        raw = np.mean(self._cost(self.base))
+        self.impact_reference = impact_reference or (
+            scenario.impact_a, scenario.impact_b, scenario.impact_gamma,
+        )
+        raw = np.mean(self._cost(self.base, self.impact_reference))
         self.impact_scale = observed / max(raw, 1e-12)
 
-    def _cost(self, participation: np.ndarray) -> np.ndarray:
-        return self.p.impact_a + self.p.impact_b * np.maximum(0, participation) ** self.p.impact_gamma
+    def _cost(
+        self,
+        participation: np.ndarray,
+        impact_parameters: tuple[float, float, float] | None = None,
+    ) -> np.ndarray:
+        a, b, gamma = impact_parameters or (
+            self.p.impact_a, self.p.impact_b, self.p.impact_gamma,
+        )
+        return a + b * np.maximum(0, participation) ** gamma
 
     def metric(self, aum_bn: float) -> dict:
         ratio = max(aum_bn, 0.01) / max(self.p.aum0, 0.01)

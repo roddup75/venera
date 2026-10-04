@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from capacity_model import BUCKETS, AdvEngine, Scenario, calibrate_orders
+from capacity_model import BUCKETS, AdvEngine, BurrEngine, Scenario, calibrate_orders
 
 
 class CapacityModelTests(unittest.TestCase):
@@ -60,6 +60,31 @@ class CapacityModelTests(unittest.TestCase):
             baseline_twice["Notional above 25% ADV (%)"],
         )
         self.assertGreaterEqual(stressed_twice["P90 participation (%)"], 0.0)
+
+    def test_impact_gamma_uses_fixed_saved_calibration(self):
+        reference = (Scenario().impact_a, Scenario().impact_b, Scenario().impact_gamma)
+        engines = (
+            (
+                AdvEngine(Scenario(), self.orders, impact_reference=reference),
+                AdvEngine(Scenario(impact_gamma=1.5), self.orders, impact_reference=reference),
+            ),
+            (
+                BurrEngine(Scenario(), impact_reference=reference),
+                BurrEngine(Scenario(impact_gamma=1.5), impact_reference=reference),
+            ),
+        )
+        for baseline, changed in engines:
+            with self.subTest(engine=type(baseline).__name__):
+                self.assertNotAlmostEqual(
+                    baseline.metric(3.4)["Impact (bp)"],
+                    changed.metric(3.4)["Impact (bp)"],
+                    places=6,
+                )
+                self.assertNotAlmostEqual(
+                    baseline.metric(10.0)["Impact (bp)"],
+                    changed.metric(10.0)["Impact (bp)"],
+                    places=6,
+                )
 
 
 if __name__ == "__main__":
