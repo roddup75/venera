@@ -32,6 +32,7 @@ DEFAULT_PARAMETERS: dict[str, Any] = {
     "max_days": 10,
     "half_life": 10.0,
     "adv_volume": 100.0,
+    "liquidity_deterioration": 0.0,
     "preference_label": "Neutral prior",
     "eta": 0.85,
     "kappa": 0.0,

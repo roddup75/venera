@@ -34,6 +34,7 @@ class Scenario:
     max_days: int = 10
     half_life: float = 10.0
     adv_volume: float = 100.0
+    liquidity_deterioration: float = 0.0
     burr_c: float = LIVE["calibration"]["burrC"]
     burr_d: float = LIVE["calibration"]["burrD"]
     burr_scale: float = LIVE["calibration"]["burrScale"]
@@ -146,10 +147,12 @@ class AdvEngine:
 
     def _distribution(self, aum_bn: float) -> dict:
         holdings = min(max(self.p.holdings, 1), max(self.p.universe_size, 1))
-        size = max(aum_bn, 0.0001) / self.anchor_aum * self.anchor_holdings / holdings
+        aum_ratio = max(aum_bn, 0.0001) / self.anchor_aum
+        size = aum_ratio * self.anchor_holdings / holdings
         frequency = holdings / self.anchor_holdings * max(self.p.turnover, 0) / 100 / self.historical_turnover
         ticket = self.orders.ticket.to_numpy() * size
-        adv = self.orders.adv.to_numpy() * max(self.p.adv_volume, 0.01) / 100
+        liquidity_factor = aum_ratio ** -max(self.p.liquidity_deterioration, 0.0)
+        adv = self.orders.adv.to_numpy() * max(self.p.adv_volume, 0.01) / 100 * liquidity_factor
         count = self.orders["count"].to_numpy() * frequency
         participation = ticket / adv
         bucket = np.searchsorted(self.buckets.upper.to_numpy(), participation, side="left")
@@ -161,6 +164,10 @@ class AdvEngine:
         average_execution_days = (
             float(np.dot(count, participation / self.rho) / count_total) if count_total else 0.0
         )
+        order = np.argsort(participation)
+        cumulative_notional = np.cumsum(historical_weights[order])
+        p90_index = min(int(np.searchsorted(cumulative_notional, 0.90, side="left")), len(order) - 1)
+        p90_participation = float(participation[order[p90_index]])
         return {
             "counts": counts, "values": values,
             "alpha_raw": float(np.dot(historical_weights, alpha)),
@@ -169,6 +176,9 @@ class AdvEngine:
             "multi": float(np.dot(historical_weights, required >= 2)),
             "three": float(np.dot(historical_weights, required >= 3)),
             "mean_participation": float(np.dot(historical_weights, participation)),
+            "p90_participation": p90_participation,
+            "notional_above_10": float(np.dot(historical_weights, participation > 0.10)),
+            "notional_above_25": float(np.dot(historical_weights, participation > 0.25)),
             "unfinished": float(np.dot(historical_weights, 1 - fraction)),
             "required": required, "count_weights": count,
         }
@@ -191,6 +201,9 @@ class AdvEngine:
             "Retained alpha (%)": 100 * net_alpha / max(self.p.gross_alpha, 0.01),
             "Average days": d["avg_days"], "Multi-day (%)": 100 * d["multi"],
             "3+ days (%)": 100 * d["three"], "Mean participation (%)": 100 * d["mean_participation"],
+            "P90 participation (%)": 100 * d["p90_participation"],
+            "Notional above 10% ADV (%)": 100 * d["notional_above_10"],
+            "Notional above 25% ADV (%)": 100 * d["notional_above_25"],
             "Unfinished notional (%)": 100 * d["unfinished"],
             "Annual parent orders": float(d["counts"].sum()), "Annual value": float(d["values"].sum()),
         }
@@ -279,6 +292,9 @@ class BurrEngine:
             "Average days": float(np.mean(participation / (self.p.daily_participation / 100))),
             "Multi-day (%)": float((days >= 2).mean() * 100),
             "3+ days (%)": float((days >= 3).mean() * 100), "Mean participation (%)": float(participation.mean() * 100),
+            "P90 participation (%)": float(np.quantile(participation, 0.90) * 100),
+            "Notional above 10% ADV (%)": float((participation > 0.10).mean() * 100),
+            "Notional above 25% ADV (%)": float((participation > 0.25).mean() * 100),
             "Unfinished notional (%)": 0.0,
         }
 

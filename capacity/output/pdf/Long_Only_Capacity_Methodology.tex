@@ -150,11 +150,18 @@ reconstruct the actual 40-stock portfolio.
 For scenario AUM $A$, holdings $H$ and decimal one-way turnover $T$, the ADV model requires
 $1\leq H\leq U$ and uses
 \begin{equation}\label{eq:advscaling}
- s_Q=\frac{A}{A_\star}\frac{H_\star}{H},\qquad
- s_N=\frac{H}{H_\star}\frac{T}{T_\star},\qquad
- Q'_k=s_QQ_k,\quad \nu'_k=s_N\nu_k,\quad p'_k=\frac{Q'_k}{vL_k}.
+ \begin{aligned}
+ r_A&=\frac{A}{A_\star}, & v(A)&=v_0r_A^{-\lambda_{\rm liq}},\\
+ s_Q&=\frac{A}{A_\star}\frac{H_\star}{H}, &
+ s_N&=\frac{H}{H_\star}\frac{T}{T_\star},\\
+ Q'_k&=s_QQ_k, & \nu'_k&=s_N\nu_k, & p'_k&=\frac{Q'_k}{v(A)L_k}.
+ \end{aligned}
 \end{equation}
-Here $v>0$ is the market-volume factor (1 for observed ADV, 0.5 for a 50\% volume stress).
+Here $v_0>0$ is the market-volume factor at the reference AUM (1 for observed ADV, 0.5 for a
+50\% volume stress). The optional liquidity-deterioration elasticity $\lambda_{\rm liq}\geq0$
+is a user-approved stress assumption. Setting it to zero preserves the fixed-liquidity baseline;
+positive values reduce effective ADV as AUM grows and imply $p'_k\propto r_A^{1+\lambda_{\rm liq}}$
+when holdings are fixed. A single historical AUM sample cannot estimate this elasticity.
 Higher turnover increases frequency, rather than ticket size, under this convention.
 Higher holdings decreases tickets and increases frequency. These behavioural assumptions imply
 \begin{equation}\label{eq:conservation}
@@ -597,8 +604,8 @@ current case, average theoretical impact rises from approximately 8.69 bp at USD
 10.28 bp at USD 15 billion. Additional pressure appears in alpha delay and unfinished notional,
 which should be read alongside the impact series.
 
-By contrast, weighted participation is linear in AUM under fixed holdings, market ADV and
-liquidity preference. Equations~\eqref{eq:advscaling} and~\eqref{eq:advweights} imply
+In the baseline $\lambda_{\rm liq}=0$, weighted participation is linear in AUM under fixed holdings,
+market ADV and liquidity preference. Equations~\eqref{eq:advscaling} and~\eqref{eq:advweights} imply
 \begin{equation}\label{eq:linearparticipation}
  p'_k(A)=p_k\frac{A}{A_\star},\qquad
  \bar p(A)=\sum_k\omega_kp'_k(A)
@@ -609,12 +616,22 @@ orders cross bucket boundaries and the shares above 10\%, 25\%, 50\% and 100\% A
 rapidly. Tail percentiles, threshold exceedance shares, multi-day orders and unfinished notional
 are therefore more informative about nonlinear liquidity pressure than the mean alone.
 
+The optional deterioration stress makes the mean itself nonlinear without changing the order-size
+accounting:
+\begin{equation}\label{eq:stressedparticipation}
+ \bar p(A)=\bar p(A_\star)
+ \left(\frac{A}{A_\star}\right)^{1+\lambda_{\rm liq}}.
+\end{equation}
+For example, $\lambda_{\rm liq}=0.20$ changes a twofold AUM increase into a 2.30-fold
+participation increase and a fourfold AUM increase into a 5.28-fold participation increase.
+The Overview tail-pressure chart separately reports traded notional above 10\% and 25\% ADV and
+the notional-weighted 90th-percentile parent-order participation.
+
 A convex impact curve would require $\gamma>1$ or an additional crowding, spread, volatility or
 liquidity-risk term and should be supported by an appropriate recalibration sample. A nonlinear
-mean-participation curve would require an AUM-dependent mechanism such as changing holdings,
-endogenous migration toward less-liquid securities, market-volume stress or binding finite-universe
-constraints. These are alternative scenario assumptions rather than implications of the current
-fixed-composition scaling rule.
+mean-participation curve requires an AUM-dependent mechanism. The implemented
+$\lambda_{\rm liq}$ stress is a simple representation; changing holdings, endogenous migration
+toward less-liquid securities or binding finite-universe constraints are richer alternatives.
 
 \small
 \section{User-set policy and scenario parameters}
@@ -636,6 +653,7 @@ Alpha half-life $H_\alpha$ & 10 & Trading days & Time for forecast alpha to halv
 AUM scenario grid & 1--100 & Currency bn & Range over which curves and thresholds are evaluated.\\
 Liquidity preference $\beta$ & $-2,0,2$ & Prior tilt & Illiquid, neutral or liquid preference; not an observed trading allocation.\\
 Market-volume factor $v$ & 1.00 & Multiplier & Stress scenario applied to ADV after historical calibration.\\
+Liquidity deterioration $\lambda_{\rm liq}$ & 0.00 & Elasticity & Optional decline in effective ADV as AUM grows. Zero preserves the linear baseline; positive values require SME approval or multi-AUM evidence.\\
 Net IR threshold & 0.40 & Ratio & Minimum acceptable net information ratio.\\
 Alpha-retention threshold & 80\% & Percentage & Minimum fraction of current gross alpha remaining after delay and impact.\\
 Impact-drag threshold & 100 & bp p.a. & Maximum acceptable annual return drag.\\

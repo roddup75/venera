@@ -46,6 +46,8 @@ Its Strategy creator saves model defaults, liquidity buckets and ADV distributio
 select a saved case from the sidebar to load it throughout the Capacity Lab.
 The saved trading-universe size constrains holdings and determines the finite stock-count grid used
 to interpolate the ADV percentile distribution (Swiss default: 203 stocks).
+An optional liquidity-deterioration elasticity stresses effective ADV as AUM grows, while the
+Overview tail chart reports threshold exceedances and the weighted 90th-percentile trade size.
 
 Run its model tests with:
 

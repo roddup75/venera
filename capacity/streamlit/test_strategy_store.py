@@ -14,6 +14,7 @@ class StrategyStoreTests(unittest.TestCase):
         parameters = {
             **DEFAULT_PARAMETERS, "aum0": 8.0, "holdings": 80,
             "universe_size": 1200, "max_aum": 40.0,
+            "liquidity_deterioration": 0.2,
         }
         buckets = pd.DataFrame(source["buckets"])
         adv_points = pd.DataFrame(source["adv_points"])
@@ -28,6 +29,7 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved["parameters"]["aum0"], 8.0)
         self.assertEqual(saved["parameters"]["holdings"], 80)
         self.assertEqual(saved["parameters"]["universe_size"], 1200)
+        self.assertEqual(saved["parameters"]["liquidity_deterioration"], 0.2)
         saved_buckets = pd.DataFrame(saved["buckets"])
         saved_adv = pd.DataFrame(saved["adv_points"])
         orders = calibrate_orders(0.0, saved_buckets, saved_adv, 1200)

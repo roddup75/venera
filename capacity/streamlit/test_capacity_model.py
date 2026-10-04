@@ -38,6 +38,29 @@ class CapacityModelTests(unittest.TestCase):
         self.assertLess(current, 1.0)
         self.assertAlmostEqual(twice, current * 2, places=7)
 
+    def test_liquidity_deterioration_accelerates_tail_pressure(self):
+        stressed = AdvEngine(
+            Scenario(liquidity_deterioration=0.20), self.orders,
+            anchor_aum=3.4, anchor_holdings=40,
+        )
+        baseline_current = self.engine.metric(3.4)
+        stressed_current = stressed.metric(3.4)
+        baseline_twice = self.engine.metric(6.8)
+        stressed_twice = stressed.metric(6.8)
+        self.assertAlmostEqual(
+            baseline_current["Mean participation (%)"],
+            stressed_current["Mean participation (%)"], places=7,
+        )
+        self.assertGreater(
+            stressed_twice["Mean participation (%)"],
+            baseline_twice["Mean participation (%)"],
+        )
+        self.assertGreater(
+            stressed_twice["Notional above 25% ADV (%)"],
+            baseline_twice["Notional above 25% ADV (%)"],
+        )
+        self.assertGreaterEqual(stressed_twice["P90 participation (%)"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

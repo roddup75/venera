@@ -168,6 +168,12 @@ with st.sidebar:
     max_days = st.number_input("Maximum execution days", 1, 252, int(saved["max_days"]), 1, key=main_key + "max_days")
     half_life = st.number_input("Alpha half-life (days)", .1, 1260.0, float(saved["half_life"]), 1.0, key=main_key + "half_life")
     adv_volume = st.number_input("Market ADV level (%)", 1.0, 300.0, float(saved["adv_volume"]), 5.0, disabled=engine_name.startswith("Burr"), key=main_key + "adv_volume")
+    liquidity_deterioration = st.number_input(
+        "Liquidity deterioration elasticity (λ)",
+        0.0, 1.0, float(saved["liquidity_deterioration"]), .05,
+        disabled=engine_name.startswith("Burr"), key=main_key + "liquidity_deterioration",
+        help="Optional ADV stress as AUM grows. Zero preserves linear participation; positive values make effective liquidity decline with scale.",
+    )
     preference_options = ["Neutral prior", "Favour liquid stocks", "Favour illiquid stocks"]
     preference_label = st.selectbox(
         "Liquidity preference",
@@ -227,6 +233,7 @@ scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_
                     turnover=turnover, holdings=int(holdings), universe_size=int(universe_size), scale_elasticity=eta,
                     tail_elasticity=kappa, daily_participation=daily, max_days=int(max_days),
                     half_life=half_life, adv_volume=adv_volume,
+                    liquidity_deterioration=liquidity_deterioration,
                     burr_c=float(saved["burr_c"]), burr_d=float(saved["burr_d"]),
                     burr_scale=float(saved["burr_scale"]), impact_a=float(saved["impact_a"]),
                     impact_b=float(saved["impact_b"]), impact_gamma=float(saved["impact_gamma"]))
@@ -311,6 +318,35 @@ with overview:
         "The impact series uses the fitted concave participation curve and the daily participation cap; "
         "alpha-delay and unfinished-notional losses are reported separately."
     )
+    fig = go.Figure()
+    fig.add_scatter(
+        x=data["AUM"], y=data["Notional above 10% ADV (%)"], mode="lines",
+        name="Notional above 10% ADV", line=dict(color=AMBER, width=3),
+        hovertemplate="AUM: $%{x:.2f}bn<br>Notional above 10% ADV: %{y:.2f}%<extra></extra>",
+    )
+    fig.add_scatter(
+        x=data["AUM"], y=data["Notional above 25% ADV (%)"], mode="lines",
+        name="Notional above 25% ADV", line=dict(color=RUST, width=3),
+        hovertemplate="AUM: $%{x:.2f}bn<br>Notional above 25% ADV: %{y:.2f}%<extra></extra>",
+    )
+    fig.add_scatter(
+        x=data["AUM"], y=data["P90 participation (%)"], mode="lines", yaxis="y2",
+        name="P90 weighted trade size", line=dict(color=BLUE, width=3),
+        hovertemplate="AUM: $%{x:.2f}bn<br>P90 trade size: %{y:.2f}% ADV<extra></extra>",
+    )
+    add_aum_markers(fig, aum_markers, max_aum)
+    fig.update_layout(
+        title="Liquidity tail pressure",
+        xaxis_title="AUM (USD bn)",
+        yaxis=dict(title="Traded notional above threshold (%)"),
+        yaxis2=dict(title="P90 weighted trade size (% ADV)", overlaying="y", side="right", showgrid=False),
+        legend=dict(orientation="h", y=1.12),
+    )
+    st.plotly_chart(style_figure(fig), width="stretch")
+    st.caption(
+        "Tail measures reveal nonlinear bucket crossings that the weighted mean can conceal. "
+        "Positive λ additionally makes effective ADV decline as AUM grows."
+    )
     scenario_table = pd.DataFrame([base, twice, four]).rename(
         columns={"Average days": "Avg execution (days)"},
     )
@@ -356,7 +392,7 @@ with demo:
             c1, c2 = st.columns(2)
             demo_aum_1 = c1.number_input("AUM 1 ($bn)", .01, 1000.0, float(aum0), .1, key="demo_aum_1")
             demo_aum_2 = c2.number_input("AUM 2 ($bn)", .01, 1000.0, float(aum0 * 2), .1, key="demo_aum_2")
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4 = st.columns(4)
             if "demo_aum_holdings" in st.session_state and int(st.session_state["demo_aum_holdings"]) > int(universe_size):
                 st.session_state["demo_aum_holdings"] = int(universe_size)
             demo_holdings_initial = {} if "demo_aum_holdings" in st.session_state else {"value": int(holdings)}
@@ -370,6 +406,10 @@ with demo:
                 ["Neutral prior", "Favour liquid stocks", "Favour illiquid stocks"],
                 key="demo_aum_preference",
             )
+            demo_liquidity_deterioration = c4.number_input(
+                "Liquidity deterioration (λ)", 0.0, 1.0,
+                float(liquidity_deterioration), .05, key="demo_aum_liquidity_deterioration",
+            )
             demo_preference = {
                 "Neutral prior": 0.0,
                 "Favour liquid stocks": 2.0,
@@ -380,6 +420,7 @@ with demo:
                 holdings=int(demo_holdings),
                 universe_size=int(universe_size),
                 adv_volume=float(demo_adv_volume),
+                liquidity_deterioration=float(demo_liquidity_deterioration),
             )
             demo_engine = AdvEngine(
                 demo_scenario,
@@ -521,7 +562,7 @@ with creator:
         creator_daily = c1.number_input("Daily participation (% ADV)", .1, 100.0, float(creator_defaults["daily"]), .5, key=creator_key + "daily")
         creator_max_days = c2.number_input("Maximum execution days", 1, 252, int(creator_defaults["max_days"]), 1, key=creator_key + "max_days")
         creator_half_life = c3.number_input("Alpha half-life (days)", .1, 1260.0, float(creator_defaults["half_life"]), 1.0, key=creator_key + "half_life")
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         creator_adv_volume = c1.number_input("Market ADV level (%)", 1.0, 300.0, float(creator_defaults["adv_volume"]), 5.0, key=creator_key + "adv_volume")
         creator_preference = c2.selectbox(
             "Liquidity preference",
@@ -529,7 +570,12 @@ with creator:
             index=preference_options.index(creator_defaults["preference_label"]),
             key=creator_key + "preference",
         )
-        creator_eta = c3.number_input("η · Scale elasticity", 0.0, 2.0, float(creator_defaults["eta"]), .05, key=creator_key + "eta")
+        creator_liquidity_deterioration = c3.number_input(
+            "Liquidity deterioration (λ)", 0.0, 1.0,
+            float(creator_defaults["liquidity_deterioration"]), .05,
+            key=creator_key + "liquidity_deterioration",
+        )
+        creator_eta = c4.number_input("η · Scale elasticity", 0.0, 2.0, float(creator_defaults["eta"]), .05, key=creator_key + "eta")
         c1, c2, c3 = st.columns(3)
         creator_kappa = c1.number_input("κ · Tail thickening", 0.0, 2.0, float(creator_defaults["kappa"]), .05, key=creator_key + "kappa")
         creator_min_ir = c2.number_input("Minimum net IR", 0.0, 10.0, float(creator_defaults["minimum_ir"]), .05, key=creator_key + "minimum_ir")
@@ -601,6 +647,7 @@ with creator:
                 "max_days": int(creator_max_days),
                 "half_life": float(creator_half_life),
                 "adv_volume": float(creator_adv_volume),
+                "liquidity_deterioration": float(creator_liquidity_deterioration),
                 "preference_label": creator_preference,
                 "eta": float(creator_eta),
                 "kappa": float(creator_kappa),
