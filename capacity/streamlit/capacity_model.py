@@ -30,7 +30,7 @@ class Scenario:
     universe_size: int = 203
     scale_elasticity: float = 0.85
     tail_elasticity: float = 0.0
-    daily_participation: float = 10.0
+    daily_participation: float = 20.0
     max_days: int = 10
     half_life: float = 10.0
     adv_volume: float = 100.0

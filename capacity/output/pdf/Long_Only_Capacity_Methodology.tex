@@ -209,7 +209,7 @@ its demonstrated daily capacity as
 \end{equation}
 
 Thus an order historically completed at 50--100\% ADV is not retrospectively divided into days by
-a 10\% assumption. The selected $\rho$ is a minimum capacity for orders whose demonstrated rate
+a 20\% assumption. The selected $\rho$ is a minimum capacity for orders whose demonstrated rate
 is lower. Required days, scheduled days and completion fraction are
 \begin{equation}\label{eq:advexecution}
  D_k^{\rm req}=\max(1,\lceil p'_k/\rho_k^\star\rceil),\qquad
@@ -333,9 +333,9 @@ decimal one-way turnover. Distributional migration therefore affects both compon
 net return: impact in $C(A)$ and delay in $R_g(A)$. Tracking error and turnover remain fixed assumptions
 in this specification.
 
-For example, consider a notional rank whose participation increases from 8\% to 16\% ADV. With a 10\% daily
-target and a non-binding horizon cap, its horizon increases from one to two days.
-Effective participation becomes $16\%\times1/2=8\%$, so its modeled impact is unchanged,
+For example, consider a notional rank whose participation increases from 16\% to 32\% ADV. With a 20\% minimum
+daily capacity and a non-binding horizon cap, its horizon increases from one to two days.
+Effective participation becomes $32\%\times1/2=16\%$, so its modeled impact is unchanged,
 while its alpha-capture ratio becomes $g(2,H_\alpha)/g(1,H_\alpha)<1$.
 Migration can therefore lower net IR through delay even when scheduling offsets the impact
 increase. This is an illustrative rank, not a claim about the entire portfolio.
@@ -431,8 +431,8 @@ Q0 & Q10 & Q20 & Q30 & Q40 & Q50 & Q60 & Q70 & Q80 & Q90 & Q100\\
 \end{tabular}\\[3pt]
 \small ADV in USD millions per day.
 \end{center}
-At a 10\% minimum daily capacity, equation~\eqref{eq:averageexecution} gives approximately 0.14
-trading day for the calibrated current-AUM parent orders and 0.28 day at twice current AUM. These
+At a 20\% minimum daily capacity, equation~\eqref{eq:averageexecution} gives approximately 0.08
+trading day for the calibrated current-AUM parent orders and 0.16 day at twice current AUM. These
 are count-weighted fractional completion times. Every live current-AUM parent order is classified
 as a one-day execution; whole-day buckets begin to migrate only as orders scale beyond their
 demonstrated capacities.
@@ -657,7 +657,7 @@ Parameter & Example & Unit & Interpretation\\
 \endhead
 Participation-scale elasticity $\eta$ & 0.85 & Elasticity & Response of the Burr scale to AUM. Set to 1 for proportional scaling; estimate from portfolio rescaling where possible.\\
 Tail-thickening elasticity $\kappa$ & 0.00 & Elasticity & Structural change in upper-tail liquidity composition. Keep at zero unless supported by portfolio simulations or observations.\\
-Target daily participation $\rho$ & 10\% & ADV/day & Execution-policy target used to determine horizon.\\
+Target daily participation $\rho$ & 20\% & ADV/day & Minimum execution capacity; higher demonstrated live rates are retained.\\
 Maximum execution horizon $D_{\max}$ & 10 & Trading days & Burr caps the horizon; ADV caps completion and reports unfinished notional.\\
 Alpha half-life $H_\alpha$ & 10 & Trading days & Time for forecast alpha to halve. Prefer signal-specific empirical estimates.\\
 AUM scenario grid & 1--100 & Currency bn & Range over which curves and thresholds are evaluated.\\

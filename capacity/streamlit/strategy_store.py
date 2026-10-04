@@ -28,7 +28,7 @@ DEFAULT_PARAMETERS: dict[str, Any] = {
     "holdings": 40,
     "universe_size": 203,
     "max_aum": 15.0,
-    "daily": 10.0,
+    "daily": 20.0,
     "max_days": 10,
     "half_life": 10.0,
     "adv_volume": 100.0,

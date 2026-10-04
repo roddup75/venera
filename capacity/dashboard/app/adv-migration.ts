@@ -52,13 +52,14 @@ export function createAdvEngine(p: AdvScenario, buckets: ObservedBucket[], order
   const historicalTurnover = baseValue / (2*HISTORICAL_AUM);
   const rho = Math.max(p.dailyParticipation/100,.0001), horizon = Math.max(1,Math.floor(p.maxDays));
   const cost = (x: number) => p.impactA+p.impactB*Math.pow(x,p.impactGamma);
-  const execution = (part: number) => {
-    const required = Math.max(1,Math.ceil(part/rho));
-    const days = Math.min(horizon,required), fraction = Math.min(1,horizon*rho/part);
-    return { required, fraction, alpha: fraction*capture(days,p.halfLife), cost: cost(Math.min(part,rho)) };
+  const execution = (part: number, demonstrated: number) => {
+    const dailyCapacity = Math.max(rho,demonstrated);
+    const required = Math.max(1,Math.ceil(part/dailyCapacity-1e-12));
+    const days = Math.min(horizon,required), fraction = Math.min(1,horizon*dailyCapacity/part);
+    return { required, fraction, alpha: fraction*capture(days,p.halfLife), cost: cost(Math.min(part,dailyCapacity)) };
   };
   let baseAlpha=0, baseCost=0;
-  for (const o of orders) { const e=execution(o.ticket/o.adv), w=o.ticket*o.count/baseValue; baseAlpha+=w*e.alpha; baseCost+=w*e.fraction*e.cost; }
+  for (const o of orders) { const demonstrated=o.ticket/o.adv, e=execution(demonstrated,demonstrated), w=o.ticket*o.count/baseValue; baseAlpha+=w*e.alpha; baseCost+=w*e.fraction*e.cost; }
   const observedCost=buckets.reduce((s,b)=>s+b.valueUsdMillion*1e6*b.cost,0)/baseValue;
   const costScale=observedCost/Math.max(baseCost,1e-12);
   const distribution = (aum: number) => {
@@ -70,7 +71,7 @@ export function createAdvEngine(p: AdvScenario, buckets: ObservedBucket[], order
       const ticket=o.ticket*size, part=ticket/(o.adv*Math.max(p.advVolume,.01)/100);
       const index=buckets.findIndex(b=>part<=b.upper), b=index<0?buckets.length:index;
       counts[b]+=o.count*frequency; values[b]+=ticket*o.count*frequency;
-      const w=o.ticket*o.count/baseValue, e=execution(part);
+      const w=o.ticket*o.count/baseValue, e=execution(part,o.ticket/o.adv);
       alpha+=w*e.alpha; impact+=w*e.fraction*e.cost; days+=w*e.required;
       multi+=w*(e.required>=2?1:0); three+=w*(e.required>=3?1:0);
       participation+=w*part; unfinished+=w*(1-e.fraction);
@@ -89,7 +90,8 @@ export function createAdvEngine(p: AdvScenario, buckets: ObservedBucket[], order
     const groups=[0,0,0,0];
     for(const o of orders){
       const part=o.ticket*size/(o.adv*Math.max(p.advVolume,.01)/100);
-      const required=Math.max(1,Math.ceil(part/rho));
+      const dailyCapacity=Math.max(rho,o.ticket/o.adv);
+      const required=Math.max(1,Math.ceil(part/dailyCapacity-1e-12));
       const group=required>horizon?3:required===1?0:required<=5?1:2;
       groups[group]+=o.count*frequency;
     }

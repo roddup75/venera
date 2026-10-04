@@ -69,7 +69,7 @@ const DEFAULTS: Params = {
   holdings: 40,
   scaleElasticity: 0.85,
   tailElasticity: 0,
-  dailyParticipation: 10,
+  dailyParticipation: 20,
   maxDays: 10,
   halfLife: 10,
   ...liveBucketData.calibration,
