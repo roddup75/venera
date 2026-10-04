@@ -343,7 +343,7 @@ export default function Home() {
       </aside>
 
       <section className="content">
-        <div className="hero"><div><span className="eyebrow">PORTFOLIO CAPACITY</span><h1>Analysis strategy's AUM scenarios</h1><p>Explore how liquidity migration, execution horizons and alpha decay reshape the portfolio as it scales.</p></div><div className="asof"><span>BASE CASE · USD</span><strong>${fmt(params.aum0,1)}bn</strong></div></div>
+        <div className="hero"><div><span className="eyebrow">PORTFOLIO CAPACITY</span><h1>Capacity Analysis</h1><p>Explore how liquidity migration, execution horizons and alpha decay reshape the portfolio as it scales.</p></div><div className="asof"><span>BASE CASE · USD</span><strong>${fmt(params.aum0,1)}bn</strong></div></div>
         <nav className="tabs">{([['overview','Overview'],['migration','Liquidity migration'],['inputs','Input data'],['demo','Demo building blocks']] as const).map(([id,label])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}</nav>
 
         {tab === "overview" && <>

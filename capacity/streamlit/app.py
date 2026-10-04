@@ -239,7 +239,7 @@ engine = (AdvEngine(
 data = curve(engine, max_aum)
 base, twice, four = [engine.metric(aum0 * x) for x in (1, 2, 4)]
 
-st.title("Analysis strategy's AUM scenarios")
+st.title("Capacity Analysis")
 st.caption("Distributional liquidity migration, execution horizons, market impact and alpha decay")
 overview, liquidity, demo, inputs, creator = st.tabs([
     "Overview", "Liquidity migration", "Demo building blocks", "Input data", "Strategy creator",
