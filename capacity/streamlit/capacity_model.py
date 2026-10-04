@@ -132,6 +132,8 @@ class AdvEngine:
         self.base_value = float((self.buckets.valueUsdMillion * 1e6).sum())
         self.historical_turnover = self.base_value / (2 * self.anchor_aum * 1e9)
         self.rho = max(scenario.daily_participation / 100, 0.0001)
+        observed_participation = self.orders.ticket.to_numpy() / self.orders.adv.to_numpy()
+        self.daily_capacity = np.maximum(self.rho, observed_participation)
         self.horizon = max(1, int(scenario.max_days))
         self.impact_reference = impact_reference or (
             scenario.impact_a, scenario.impact_b, scenario.impact_gamma,
@@ -147,14 +149,18 @@ class AdvEngine:
         participation: np.ndarray,
         impact_parameters: tuple[float, float, float] | None = None,
     ) -> tuple[np.ndarray, ...]:
-        required = np.maximum(1, np.ceil(participation / self.rho)).astype(int)
+        required = np.maximum(
+            1, np.ceil(participation / self.daily_capacity - 1e-12),
+        ).astype(int)
         days = np.minimum(self.horizon, required)
-        fraction = np.minimum(1, self.horizon * self.rho / np.maximum(participation, 1e-12))
+        fraction = np.minimum(
+            1, self.horizon * self.daily_capacity / np.maximum(participation, 1e-12),
+        )
         alpha = fraction * alpha_capture(days, self.p.half_life)
         a, b, gamma = impact_parameters or (
             self.p.impact_a, self.p.impact_b, self.p.impact_gamma,
         )
-        cost = a + b * np.minimum(participation, self.rho) ** gamma
+        cost = a + b * np.minimum(participation, self.daily_capacity) ** gamma
         return required, days, fraction, alpha, cost
 
     def _distribution(
@@ -178,7 +184,8 @@ class AdvEngine:
         historical_weights = self.orders.ticket.to_numpy() * self.orders["count"].to_numpy() / self.base_value
         count_total = float(count.sum())
         average_execution_days = (
-            float(np.dot(count, participation / self.rho) / count_total) if count_total else 0.0
+            float(np.dot(count, participation / self.daily_capacity) / count_total)
+            if count_total else 0.0
         )
         order = np.argsort(participation)
         cumulative_notional = np.cumsum(historical_weights[order])

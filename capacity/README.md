@@ -86,13 +86,13 @@ not the actual portfolio or a unique historical order allocation.
 Tickets scale as `(A / 3.4bn) * (40 / holdings)`; frequency scales as
 `(holdings / 40) * (turnover / historical turnover)`. ADV stress changes available
 volume without refitting historical data. These rules conserve `annual value = 2*A*T`.
-Execution respects the daily participation cap and reports required days without
-truncation. The horizon limits completed notional; uncompleted fractions receive
-no captured alpha and incur no execution impact. Alpha and costs are normalized
-to the historical portfolio under the selected execution policy. This normalization
-means changing that policy also changes the reference; it is not an absolute
-historical execution-policy backtest. Stock overlap and concurrent orders cannot
-be inferred from these aggregate inputs.
+The live parent-order sample is treated as observed one-day execution. For each
+synthetic order, daily capacity is the greater of its demonstrated current-AUM
+participation and the selected daily-participation input. Required days are reported
+without truncation as AUM scales. The horizon limits completed notional; uncompleted
+fractions receive no captured alpha and incur no execution impact. Alpha and costs
+are normalized to the historical portfolio. Stock overlap and concurrent orders
+cannot be inferred from these aggregate inputs.
 
 The ADV model uses observed counts and dollar values, not editable rounded share
 percentages. Edited expected costs still adjust its impact anchor. The original

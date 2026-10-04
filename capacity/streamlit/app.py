@@ -202,7 +202,11 @@ with st.sidebar:
     st.caption("Selected approach: " + ("ADV-bucket migration" if engine_name.startswith("ADV") else "Burr migration"))
 
     st.subheader("Execution")
-    daily = st.number_input("Daily participation (% ADV)", .1, 100.0, float(saved["daily"]), .5, key=main_key + "daily")
+    daily = st.number_input(
+        "Daily participation (% ADV)", .1, 100.0, float(saved["daily"]), .5,
+        key=main_key + "daily",
+        help="Minimum assumed daily capacity. A live parent order that demonstrated a higher one-day participation at current AUM retains that observed capacity.",
+    )
     max_days = st.number_input("Maximum execution days", 1, 252, int(saved["max_days"]), 1, key=main_key + "max_days")
     half_life = st.number_input("Alpha half-life (days)", .1, 1260.0, float(saved["half_life"]), 1.0, key=main_key + "half_life")
     preference = {"Neutral prior": 0.0, "Favour liquid stocks": 2.0, "Favour illiquid stocks": -2.0}[preference_label]
@@ -365,7 +369,7 @@ with overview:
     st.plotly_chart(style_figure(fig), width="stretch")
     st.caption(
         "Under fixed holdings and market ADV, weighted participation scales linearly with AUM. "
-        "The impact series uses the fitted concave participation curve and the daily participation cap; "
+        "The impact series uses the fitted participation curve and each order's demonstrated daily capacity; "
         "alpha-delay and unfinished-notional losses are reported separately."
     )
     fig = go.Figure()
@@ -427,7 +431,7 @@ with liquidity:
             st.plotly_chart(style_figure(fig), width="stretch")
         else:
             st.info("Execution-outcome counts require the ADV-calibrated parent-order engine.")
-    st.caption("Participation buckets are defined by total parent-order value divided by ADV. Daily participation changes execution outcomes, not the parent-order bucket.")
+    st.caption("Participation buckets use total parent-order value divided by ADV. Live current-AUM orders are treated as observed one-day executions; the daily participation input supplies the minimum capacity used as orders scale.")
 
 with demo:
     migration_demo, impact_demo, alpha_demo = st.tabs(["1. Liquidity migration", "2. Impact model", "3. Alpha decay"])

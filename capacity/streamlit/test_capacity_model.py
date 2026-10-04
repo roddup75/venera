@@ -15,6 +15,8 @@ class CapacityModelTests(unittest.TestCase):
         self.assertAlmostEqual(self.orders["count"].sum(), 971, places=6)
         self.assertAlmostEqual((self.orders.ticket * self.orders["count"]).sum(), (BUCKETS.valueUsdMillion * 1e6).sum(), places=2)
         self.assertAlmostEqual(self.engine.metric(3.4)["Alpha capture (%)"], 100, places=7)
+        self.assertAlmostEqual(self.engine.metric(3.4)["Multi-day (%)"], 0, places=7)
+        self.assertAlmostEqual(self.engine.metric(3.4)["3+ days (%)"], 0, places=7)
 
     def test_migration_shares_sum_to_100(self):
         for aum in (3.4, 6.8, 13.6):

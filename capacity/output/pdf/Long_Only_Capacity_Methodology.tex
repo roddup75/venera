@@ -200,23 +200,32 @@ The rule exposes the cost-versus-delay trade-off studied in optimal execution
 \cite{almgren2001}. A production version can replace it with direct optimisation.
 
 
-In the ADV-calibrated model, the participation limit is enforced without treating truncated
-orders as complete. Required days, scheduled days and completion fraction are
+In the ADV-calibrated model, the live parent-order sample is treated as observed one-day
+execution. Let $p_{k,\star}$ denote order $k$'s calibrated participation at current AUM and define
+its demonstrated daily capacity as
+
+\begin{equation}\label{eq:demonstratedcapacity}
+ \rho_k^\star=\max(\rho,p_{k,\star}).
+\end{equation}
+
+Thus an order historically completed at 50--100\% ADV is not retrospectively divided into days by
+a 10\% assumption. The selected $\rho$ is a minimum capacity for orders whose demonstrated rate
+is lower. Required days, scheduled days and completion fraction are
 \begin{equation}\label{eq:advexecution}
- D_k^{\rm req}=\max(1,\lceil p'_k/\rho\rceil),\qquad
+ D_k^{\rm req}=\max(1,\lceil p'_k/\rho_k^\star\rceil),\qquad
  d_k=\min(D_{\max},D_k^{\rm req}),\qquad
- e_k=\min(1,D_{\max}\rho/p'_k).
+ e_k=\min(1,D_{\max}\rho_k^\star/p'_k).
 \end{equation}
 The implementation floors $D_{\max}$ to a positive integer. The dashboard's average-execution
 statistic is the count-weighted fractional completion
 time
 \begin{equation}\label{eq:averageexecution}
- \bar\tau(A)=\frac{\sum_k\nu'_k(p'_k/\rho)}{\sum_k\nu'_k}.
+ \bar\tau(A)=\frac{\sum_k\nu'_k(p'_k/\rho_k^\star)}{\sum_k\nu'_k}.
 \end{equation}
 It may therefore be below one day when most parent orders use less than one daily participation
 allowance. The integer $D_k^{\rm req}$ remains the conservative scheduling input for alpha decay,
 completion and multi-day classifications. Impact uses
-$\widetilde p_k=\min(p'_k,\rho)$ as a daily-rate proxy.
+$\widetilde p_k=\min(p'_k,\rho_k^\star)$ as a daily-rate proxy.
 This proxy approximates a participation-capped schedule and does not model the smaller final
 slice separately. Alpha capture uses equal slices over $d_k$ for the completed fraction.
 These two scheduling approximations should be refined together when daily executions are available.
@@ -342,8 +351,8 @@ Because every ticket scales by the same factor, the intended-notional weights ar
 \begin{equation}\label{eq:advweights}
  \omega_k=\frac{\nu_kQ_k}{V_\star},\qquad \sum_k\omega_k=1.
 \end{equation}
-Evaluate the historical reference at $A=A_\star$, $H=H_\star$, $v=1$, under the selected daily
-participation limit, horizon and half-life. Use a subscript $\star$ for those reference execution
+Evaluate the historical reference at $A=A_\star$, $H=H_\star$, $v=1$, under the demonstrated
+one-day capacities, horizon and half-life. Use a subscript $\star$ for those reference execution
 quantities. Then
 \begin{equation}\label{eq:advnormalisation}
  G_\star=\sum_k\omega_ke_{k,\star}g(d_{k,\star},H_\alpha),\qquad
@@ -422,10 +431,11 @@ Q0 & Q10 & Q20 & Q30 & Q40 & Q50 & Q60 & Q70 & Q80 & Q90 & Q100\\
 \end{tabular}\\[3pt]
 \small ADV in USD millions per day.
 \end{center}
-At 10\% daily participation, equation~\eqref{eq:averageexecution} gives approximately 0.17 trading
-day for the calibrated current-AUM parent orders and 0.35 day at twice current AUM. These are
-count-weighted fractional completion times. Whole-day execution buckets still round orders up for
-alpha-delay and multi-day diagnostics.
+At a 10\% minimum daily capacity, equation~\eqref{eq:averageexecution} gives approximately 0.14
+trading day for the calibrated current-AUM parent orders and 0.28 day at twice current AUM. These
+are count-weighted fractional completion times. Every live current-AUM parent order is classified
+as a one-day execution; whole-day buckets begin to migrate only as orders scale beyond their
+demonstrated capacities.
 
 \paragraph{Worked migration example.}
 Hold the Swiss strategy at 40 holdings, 13.9\% one-way turnover and observed market ADV. Increasing
