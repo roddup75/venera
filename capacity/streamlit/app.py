@@ -135,12 +135,6 @@ main_key = f"main::{selected_strategy_name}::"
 
 with st.sidebar:
     engine_options = ["ADV-calibrated migration", "Burr migration"]
-    engine_name = st.selectbox(
-        "Migration model",
-        engine_options,
-        index=engine_options.index(saved["engine_name"]),
-        key=main_key + "engine",
-    )
     st.subheader("Strategy")
     aum0 = st.number_input("Current AUM ($bn)", 0.1, 1000.0, float(saved["aum0"]), .1, key=main_key + "aum0")
     gross_alpha = st.number_input("Gross alpha (%)", 0.0, 100.0, float(saved["gross_alpha"]), .05, key=main_key + "gross_alpha")
@@ -163,28 +157,71 @@ with st.sidebar:
         key=holdings_key, **holdings_initial,
     )
     max_aum = st.number_input("Chart horizon ($bn)", 1.0, 1000.0, float(saved["max_aum"]), 1.0, key=main_key + "max_aum")
-    st.subheader("Migration and execution")
+
+    st.subheader("Migration")
+    preference_options = ["Neutral prior", "Favour liquid stocks", "Favour illiquid stocks"]
+    with st.expander("Advanced migration parameters"):
+        engine_name = st.selectbox(
+            "Migration approach",
+            engine_options,
+            index=engine_options.index(saved["engine_name"]),
+            format_func=lambda value: "ADV-bucket migration" if value.startswith("ADV") else "Burr migration",
+            key=main_key + "engine",
+            help="ADV-bucket migration uses the supplied trading-universe ADV distribution and live parent-order buckets. Burr migration uses a fitted parametric participation distribution.",
+        )
+        if engine_name.startswith("ADV"):
+            adv_volume = st.number_input(
+                "Market ADV level (%)", 1.0, 300.0, float(saved["adv_volume"]), 5.0,
+                key=main_key + "adv_volume",
+            )
+            liquidity_deterioration = st.number_input(
+                "Liquidity deterioration elasticity (λ)",
+                0.0, 1.0, float(saved["liquidity_deterioration"]), .05,
+                key=main_key + "liquidity_deterioration",
+                help="Optional ADV stress as AUM grows. Zero preserves linear participation; positive values make effective liquidity decline with scale.",
+            )
+            preference_label = st.selectbox(
+                "Liquidity preference",
+                preference_options,
+                index=preference_options.index(saved["preference_label"]),
+                key=main_key + "preference",
+            )
+            eta, kappa = float(saved["eta"]), float(saved["kappa"])
+            burr_c, burr_d, burr_scale = (
+                float(saved["burr_c"]), float(saved["burr_d"]), float(saved["burr_scale"]),
+            )
+        else:
+            eta = st.number_input("η · Scale elasticity", 0.0, 2.0, float(saved["eta"]), .05, key=main_key + "eta")
+            kappa = st.number_input("κ · Tail thickening", 0.0, 2.0, float(saved["kappa"]), .05, key=main_key + "kappa")
+            burr_c = st.number_input("Burr shape c", .0001, 100.0, float(saved["burr_c"]), .01, format="%.4f", key=main_key + "burr_c")
+            burr_d = st.number_input("Burr shape d", .0001, 100.0, float(saved["burr_d"]), .01, format="%.4f", key=main_key + "burr_d")
+            burr_scale = st.number_input("Burr scale", .000001, 100.0, float(saved["burr_scale"]), .001, format="%.6f", key=main_key + "burr_scale")
+            adv_volume = float(saved["adv_volume"])
+            liquidity_deterioration = float(saved["liquidity_deterioration"])
+            preference_label = saved["preference_label"]
+    st.caption("Selected approach: " + ("ADV-bucket migration" if engine_name.startswith("ADV") else "Burr migration"))
+
+    st.subheader("Execution")
     daily = st.number_input("Daily participation (% ADV)", .1, 100.0, float(saved["daily"]), .5, key=main_key + "daily")
     max_days = st.number_input("Maximum execution days", 1, 252, int(saved["max_days"]), 1, key=main_key + "max_days")
     half_life = st.number_input("Alpha half-life (days)", .1, 1260.0, float(saved["half_life"]), 1.0, key=main_key + "half_life")
-    adv_volume = st.number_input("Market ADV level (%)", 1.0, 300.0, float(saved["adv_volume"]), 5.0, disabled=engine_name.startswith("Burr"), key=main_key + "adv_volume")
-    liquidity_deterioration = st.number_input(
-        "Liquidity deterioration elasticity (λ)",
-        0.0, 1.0, float(saved["liquidity_deterioration"]), .05,
-        disabled=engine_name.startswith("Burr"), key=main_key + "liquidity_deterioration",
-        help="Optional ADV stress as AUM grows. Zero preserves linear participation; positive values make effective liquidity decline with scale.",
-    )
-    preference_options = ["Neutral prior", "Favour liquid stocks", "Favour illiquid stocks"]
-    preference_label = st.selectbox(
-        "Liquidity preference",
-        preference_options,
-        index=preference_options.index(saved["preference_label"]),
-        disabled=engine_name.startswith("Burr"),
-        key=main_key + "preference",
-    )
     preference = {"Neutral prior": 0.0, "Favour liquid stocks": 2.0, "Favour illiquid stocks": -2.0}[preference_label]
-    eta = st.number_input("η · Scale elasticity", 0.0, 2.0, float(saved["eta"]), .05, disabled=engine_name.startswith("ADV"), key=main_key + "eta")
-    kappa = st.number_input("κ · Tail thickening", 0.0, 2.0, float(saved["kappa"]), .05, disabled=engine_name.startswith("ADV"), key=main_key + "kappa")
+
+    st.subheader("Impact cost model")
+    st.caption(r"Theoretical impact (bp): $a + b \times p^\gamma$, where $p$ is participation as a fraction of ADV.")
+    impact_a = st.number_input(
+        "Impact a (bp)", 0.0, 10000.0, float(saved["impact_a"]), .01,
+        format="%.4f", key=main_key + "impact_a", help="Baseline impact intercept in basis points.",
+    )
+    impact_b = st.number_input(
+        "Impact b", 0.0, 10000.0, float(saved["impact_b"]), .01,
+        format="%.4f", key=main_key + "impact_b", help="Scale of the participation-dependent impact component.",
+    )
+    impact_gamma = st.number_input(
+        "Impact γ", .01, 10.0, float(saved["impact_gamma"]), .05,
+        key=main_key + "impact_gamma", help="Curvature of impact versus participation; values above one make the curve convex.",
+    )
+    st.caption("The live bucket costs anchor the current-AUM cost level; a, b, and γ control how impact changes with participation and AUM.")
     st.subheader("Decision thresholds")
     minimum_ir = st.number_input("Minimum net IR", 0.0, 10.0, float(saved["minimum_ir"]), .05, key=main_key + "minimum_ir")
     retained_threshold = st.number_input("Minimum retained alpha (%)", 0.0, 100.0, float(saved["retained_threshold"]), 1.0, key=main_key + "retained_threshold")
@@ -242,9 +279,8 @@ scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_
                     tail_elasticity=kappa, daily_participation=daily, max_days=int(max_days),
                     half_life=half_life, adv_volume=adv_volume,
                     liquidity_deterioration=liquidity_deterioration,
-                    burr_c=float(saved["burr_c"]), burr_d=float(saved["burr_d"]),
-                    burr_scale=float(saved["burr_scale"]), impact_a=float(saved["impact_a"]),
-                    impact_b=float(saved["impact_b"]), impact_gamma=float(saved["impact_gamma"]))
+                    burr_c=burr_c, burr_d=burr_d, burr_scale=burr_scale,
+                    impact_a=impact_a, impact_b=impact_b, impact_gamma=impact_gamma)
 selected_orders = orders(preference, strategy_buckets, strategy_adv_points, int(universe_size))
 engine = (AdvEngine(
               scenario, selected_orders, strategy_buckets,
