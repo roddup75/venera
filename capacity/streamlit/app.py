@@ -294,6 +294,7 @@ with overview:
         name="Average weighted trade size", line=dict(color=BLUE, width=3),
         hovertemplate="AUM: $%{x:.2f}bn<br>Trade size: %{y:.2f}% ADV<extra></extra>",
     )
+    add_aum_markers(fig, aum_markers, max_aum)
     fig.update_layout(
         title="Theoretical impact cost and weighted trade size",
         xaxis_title="AUM (USD bn)",
@@ -305,6 +306,11 @@ with overview:
         legend=dict(orientation="h", y=1.12),
     )
     st.plotly_chart(style_figure(fig), width="stretch")
+    st.caption(
+        "Under fixed holdings and market ADV, weighted participation scales linearly with AUM. "
+        "The impact series uses the fitted concave participation curve and the daily participation cap; "
+        "alpha-delay and unfinished-notional losses are reported separately."
+    )
     scenario_table = pd.DataFrame([base, twice, four]).rename(
         columns={"Average days": "Avg execution (days)"},
     )
