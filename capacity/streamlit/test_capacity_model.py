@@ -40,6 +40,12 @@ class CapacityModelTests(unittest.TestCase):
         self.assertLess(current, 1.0)
         self.assertAlmostEqual(twice, current * 2, places=7)
 
+    def test_economic_curves_use_continuous_execution_duration(self):
+        current = self.engine.metric(3.4)["Alpha capture (%)"]
+        just_above = self.engine.metric(3.41)["Alpha capture (%)"]
+        self.assertLess(just_above, current)
+        self.assertLess(current - just_above, 0.01)
+
     def test_liquidity_deterioration_accelerates_tail_pressure(self):
         stressed = AdvEngine(
             Scenario(liquidity_deterioration=0.20), self.orders,

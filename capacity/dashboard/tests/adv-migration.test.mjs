@@ -20,6 +20,11 @@ test('Scaling preserves trading identity and changes frequency independently of 
  for(const holdings of [20,40,80])for(const turnover of [0,13.9,40]){const e=createAdvEngine({...params,holdings,turnover},buckets,orders);near(e.metric(6.8).annualValue,2*6.8e9*turnover/100);assert.ok(Number.isFinite(e.metric(6.8).netIr));}
  const e=createAdvEngine(params,buckets,orders),twice=createAdvEngine({...params,turnover:params.turnover*2},buckets,orders);near(twice.metric(3.4).annualOrders,1942);e.bucketShares(3.4).forEach((x,i)=>near(x,twice.bucketShares(3.4)[i]));
 });
+test('Economic curves use continuous execution duration',()=>{
+ const engine=createAdvEngine(params,buckets,orders);
+ const current=engine.metric(3.4).alphaCapture, justAbove=engine.metric(3.41).alphaCapture;
+ assert.ok(justAbove<current);assert.ok(current-justAbove<.01);
+});
 test('Stress preserves incomplete orders and uncapped required horizons',()=>{
  const normal=createAdvEngine(params,buckets,orders), stressed=createAdvEngine({...params,advVolume:50},buckets,orders);
  near(normal.metric(6.8).meanParticipation,stressed.metric(3.4).meanParticipation);

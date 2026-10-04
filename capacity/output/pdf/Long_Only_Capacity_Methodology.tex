@@ -189,12 +189,14 @@ distributional expectation is calibrated back to the observed notional-weighted 
 \section{Execution horizon}
 In the Burr reference model, for target daily participation $\rho$ and maximum horizon $D_{\max}$,
 \begin{equation}\label{eq:days}
- D(p)=\min\!\left(D_{\max},\max\!\left(1,
- \left\lceil\frac{p}{\rho}\right\rceil\right)\right).
+ \tau(p)=\min\!\left(D_{\max},\max\!\left(1,\frac{p}{\rho}\right)\right).
 \end{equation}
+The continuous duration $\tau$ drives impact, alpha capture and capacity curves. The integer
+$D^{\rm req}(p)=\max(1,\lceil p/\rho\rceil)$ is retained for execution-bucket labels and threshold
+diagnostics.
 Current costs already embed the current schedule, so counterfactual effective participation is
 \begin{equation}\label{eq:effective}
- p_{\mathrm{eff},j}(A)=p_j(A)\frac{D_j(A_0)}{D_j(A)}.
+ p_{\mathrm{eff},j}(A)=p_j(A)\frac{\tau_j(A_0)}{\tau_j(A)}.
 \end{equation}
 The rule exposes the cost-versus-delay trade-off studied in optimal execution
 \cite{almgren2001}. A production version can replace it with direct optimisation.
@@ -213,7 +215,7 @@ a 20\% assumption. The selected $\rho$ is a minimum capacity for orders whose de
 is lower. Required days, scheduled days and completion fraction are
 \begin{equation}\label{eq:advexecution}
  D_k^{\rm req}=\max(1,\lceil p'_k/\rho_k^\star\rceil),\qquad
- d_k=\min(D_{\max},D_k^{\rm req}),\qquad
+ \tau_k=\min(D_{\max},\max(1,p'_k/\rho_k^\star)),\qquad
  e_k=\min(1,D_{\max}\rho_k^\star/p'_k).
 \end{equation}
 The implementation floors $D_{\max}$ to a positive integer. The dashboard's average-execution
@@ -223,32 +225,35 @@ time
  \bar\tau(A)=\frac{\sum_k\nu'_k(p'_k/\rho_k^\star)}{\sum_k\nu'_k}.
 \end{equation}
 It may therefore be below one day when most parent orders use less than one daily participation
-allowance. The integer $D_k^{\rm req}$ remains the conservative scheduling input for alpha decay,
-completion and multi-day classifications. Impact uses
+allowance. The integer $D_k^{\rm req}$ is used for multi-day classifications, while continuous
+$\tau_k$ drives alpha decay and removes artificial jumps at integer-day boundaries. Impact uses
 $\widetilde p_k=\min(p'_k,\rho_k^\star)$ as a daily-rate proxy.
 This proxy approximates a participation-capped schedule and does not model the smaller final
-slice separately. Alpha capture uses equal slices over $d_k$ for the completed fraction.
+slice separately. Alpha capture uses the analytic continuous-duration extension at $\tau_k$ for
+the completed fraction.
 These two scheduling approximations should be refined together when daily executions are available.
 
 \section{Alpha decay}
 Let $H_\alpha$ be signal half-life in trading days and $\delta=\log(2)/H_\alpha$. For equal daily
-slices over $D$ days, average alpha capture is
+slices over integer $D$ days, average alpha capture is
 \begin{equation}\label{eq:capture}
  g(D,H_\alpha)=\frac{1}{D}\sum_{t=0}^{D-1}e^{-\delta t}
  =\frac{1-e^{-\delta D}}{D(1-e^{-\delta})}.
 \end{equation}
+The dashboard evaluates the same closed form at real-valued $D=\tau$ to produce continuous
+scenario curves; it agrees with the discrete expression at every integer duration.
 For the Burr model, normalising each notional rank to current implementation gives
 \begin{equation}\label{eq:gross}
  R_g(A)=R_g(A_0)\,
- \mathbb{E}\left[\frac{g(D_j(A),H_{\alpha,j})}
- {g(D_j(A_0),H_{\alpha,j})}\right].
+ \mathbb{E}\left[\frac{g(\tau_j(A),H_{\alpha,j})}
+ {g(\tau_j(A_0),H_{\alpha,j})}\right].
 \end{equation}
 Aggregate runs currently weight alpha by executed notional. Trade-level runs should weight by each
 order's forecast alpha contribution. Predictors with different mean-reversion speeds imply
 different desired trading speeds \cite{garleanu2013}.
 
 
-For the ADV model, the completed alpha fraction is $e_k g(d_k,H_\alpha)$; unfinished notional
+For the ADV model, the completed alpha fraction is $e_k g(\tau_k,H_\alpha)$; unfinished notional
 contributes zero captured alpha. The engine normalises the aggregate capture to its historical
 aggregate, rather than averaging the individual ratios used by Burr. The resulting equation is
 specified below.
@@ -256,7 +261,7 @@ specified below.
 \paragraph{Interpretive note: where decay is applied.}
 Alpha decay is evaluated parent order by parent order, not applied directly to portfolio IR.
 A one-day order has $g(1,H_\alpha)=1$ and therefore no delay loss under this convention.
-Multi-day orders have $g(D,H_\alpha)<1$, while the ADV branch also removes the alpha associated
+Orders with $\tau>1$ have $g(\tau,H_\alpha)<1$, while the ADV branch also removes the alpha associated
 with unfinished notional through $e_k$. These order-level capture terms are aggregated into
 after-delay gross alpha. Market-impact drag is then deducted to obtain net alpha, and net alpha
 is divided by tracking error to obtain net IR. Because capture is normalised to the historical
@@ -355,7 +360,7 @@ Evaluate the historical reference at $A=A_\star$, $H=H_\star$, $v=1$, under the 
 one-day capacities, horizon and half-life. Use a subscript $\star$ for those reference execution
 quantities. Then
 \begin{equation}\label{eq:advnormalisation}
- G_\star=\sum_k\omega_ke_{k,\star}g(d_{k,\star},H_\alpha),\qquad
+ G_\star=\sum_k\omega_ke_{k,\star}g(\tau_{k,\star},H_\alpha),\qquad
  K_{\rm ADV}=\frac{\sum_b(V_b/V_\star)c_b^{\rm obs}}
  {\sum_k\omega_ke_{k,\star}c(\widetilde p_{k,\star})}.
 \end{equation}
@@ -364,7 +369,7 @@ cost in basis points per intended traded dollar are
 \begin{equation}\label{eq:advnetinputs}
  \begin{aligned}
  R_g^{\rm ADV}(A)&=R_{g,\star}
- \frac{\sum_k\omega_ke_kg(d_k,H_\alpha)}{G_\star},\\
+ \frac{\sum_k\omega_ke_kg(\tau_k,H_\alpha)}{G_\star},\\
  \bar c^{\rm ADV}(A)&=K_{\rm ADV}\sum_k\omega_ke_kc(\widetilde p_k),\\
  U(A)&=\sum_k\omega_k(1-e_k).
  \end{aligned}

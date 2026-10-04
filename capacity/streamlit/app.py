@@ -431,7 +431,7 @@ with liquidity:
             st.plotly_chart(style_figure(fig), width="stretch")
         else:
             st.info("Execution-outcome counts require the ADV-calibrated parent-order engine.")
-    st.caption("Participation buckets use total parent-order value divided by ADV. Live current-AUM orders are treated as observed one-day executions; the daily participation input supplies the minimum capacity used as orders scale.")
+    st.caption("Participation buckets use total parent-order value divided by ADV. Live current-AUM orders are treated as observed one-day executions; the daily participation input supplies the minimum capacity used as orders scale. Integer execution buckets step at day thresholds, while the economic capacity curves use continuous duration.")
 
 with demo:
     migration_demo, impact_demo, alpha_demo = st.tabs(["1. Liquidity migration", "2. Impact model", "3. Alpha decay"])

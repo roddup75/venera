@@ -101,7 +101,7 @@ function makeEngine(p: Params, buckets: Bucket[]) {
   const n = 700;
   const quantiles = Array.from({ length: n }, (_, i) => (i + 0.5) / n);
   const basePart = quantiles.map((q) => burrPpf(q, p.burrC, p.burrD, p.burrScale));
-  const baseDays = basePart.map((x) => Math.min(p.maxDays, Math.max(1, Math.ceil(x / (p.dailyParticipation / 100)))));
+  const baseDays = basePart.map((x) => Math.min(p.maxDays, Math.max(1, x / (p.dailyParticipation / 100))));
   const baseCapture = baseDays.map((d) => alphaCapture(d, p.halfLife));
   const shareTotal = buckets.reduce((s, b) => s + Math.max(0, b.share), 0) || 1;
   const observedImpact = buckets.reduce((s, b) => s + Math.max(0, b.share) * b.cost, 0) / shareTotal;
@@ -121,14 +121,15 @@ function makeEngine(p: Params, buckets: Bucket[]) {
     let partSum = 0;
     for (let i = 0; i < n; i++) {
       const part = burrPpf(quantiles[i], p.burrC, d, scale);
-      const days = Math.min(p.maxDays, Math.max(1, Math.ceil(part / (p.dailyParticipation / 100))));
-      const effective = part * baseDays[i] / days;
+      const continuousDays = Math.min(p.maxDays, Math.max(1, part / (p.dailyParticipation / 100)));
+      const requiredDays = Math.max(1, Math.ceil(part / (p.dailyParticipation / 100) - 1e-12));
+      const effective = part * baseDays[i] / continuousDays;
       impactSum += curve(effective);
-      captureSum += alphaCapture(days, p.halfLife) / baseCapture[i];
-      daysSum += days;
+      captureSum += alphaCapture(continuousDays, p.halfLife) / baseCapture[i];
+      daysSum += continuousDays;
       partSum += part;
-      if (days >= 2) multi++;
-      if (days >= 3) three++;
+      if (requiredDays >= 2) multi++;
+      if (requiredDays >= 3) three++;
     }
     const impact = (impactSum / n) * impactCalibration;
     const alphaCapturePct = (captureSum / n) * 100;

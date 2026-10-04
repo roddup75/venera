@@ -152,7 +152,9 @@ class AdvEngine:
         required = np.maximum(
             1, np.ceil(participation / self.daily_capacity - 1e-12),
         ).astype(int)
-        days = np.minimum(self.horizon, required)
+        days = np.minimum(
+            self.horizon, np.maximum(1.0, participation / self.daily_capacity),
+        )
         fraction = np.minimum(
             1, self.horizon * self.daily_capacity / np.maximum(participation, 1e-12),
         )
@@ -291,7 +293,10 @@ class BurrEngine:
         self.buckets = (BUCKETS if buckets is None else buckets).reset_index(drop=True)
         self.q = (np.arange(700) + 0.5) / 700
         self.base = burr_ppf(self.q, scenario.burr_c, scenario.burr_d, scenario.burr_scale)
-        self.base_days = np.minimum(scenario.max_days, np.maximum(1, np.ceil(self.base / (scenario.daily_participation / 100))))
+        self.base_days = np.minimum(
+            scenario.max_days,
+            np.maximum(1.0, self.base / (scenario.daily_participation / 100)),
+        )
         self.base_capture = alpha_capture(self.base_days, scenario.half_life)
         observed = float(np.average(self.buckets.cost, weights=self.buckets.share))
         self.impact_reference = impact_reference or (
@@ -315,10 +320,16 @@ class BurrEngine:
         scale = self.p.burr_scale * ratio ** self.p.scale_elasticity
         d = self.p.burr_d * ratio ** -self.p.tail_elasticity
         participation = burr_ppf(self.q, self.p.burr_c, d, scale)
-        days = np.minimum(self.p.max_days, np.maximum(1, np.ceil(participation / (self.p.daily_participation / 100))))
-        effective = participation * self.base_days / days
+        continuous_days = np.minimum(
+            self.p.max_days,
+            np.maximum(1.0, participation / (self.p.daily_participation / 100)),
+        )
+        required = np.maximum(
+            1, np.ceil(participation / (self.p.daily_participation / 100) - 1e-12),
+        ).astype(int)
+        effective = participation * self.base_days / continuous_days
         impact = float(np.mean(self._cost(effective)) * self.impact_scale)
-        capture_pct = float(np.mean(alpha_capture(days, self.p.half_life) / self.base_capture) * 100)
+        capture_pct = float(np.mean(alpha_capture(continuous_days, self.p.half_life) / self.base_capture) * 100)
         implemented = self.p.gross_alpha * capture_pct / 100
         annual_drag = 2 * self.p.turnover / 100 * impact
         net_alpha = implemented - annual_drag / 100
@@ -328,8 +339,8 @@ class BurrEngine:
             "Net alpha (%)": net_alpha, "Net IR": net_alpha / max(self.p.tracking_error, .01),
             "Retained alpha (%)": 100 * net_alpha / max(self.p.gross_alpha, .01),
             "Average days": float(np.mean(participation / (self.p.daily_participation / 100))),
-            "Multi-day (%)": float((days >= 2).mean() * 100),
-            "3+ days (%)": float((days >= 3).mean() * 100), "Mean participation (%)": float(participation.mean() * 100),
+            "Multi-day (%)": float((required >= 2).mean() * 100),
+            "3+ days (%)": float((required >= 3).mean() * 100), "Mean participation (%)": float(participation.mean() * 100),
             "P90 participation (%)": float(np.quantile(participation, 0.90) * 100),
             "Notional above 10% ADV (%)": float((participation > 0.10).mean() * 100),
             "Notional above 25% ADV (%)": float((participation > 0.25).mean() * 100),

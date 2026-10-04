@@ -55,7 +55,7 @@ export function createAdvEngine(p: AdvScenario, buckets: ObservedBucket[], order
   const execution = (part: number, demonstrated: number) => {
     const dailyCapacity = Math.max(rho,demonstrated);
     const required = Math.max(1,Math.ceil(part/dailyCapacity-1e-12));
-    const days = Math.min(horizon,required), fraction = Math.min(1,horizon*dailyCapacity/part);
+    const days = Math.min(horizon,Math.max(1,part/dailyCapacity)), fraction = Math.min(1,horizon*dailyCapacity/part);
     return { required, fraction, alpha: fraction*capture(days,p.halfLife), cost: cost(Math.min(part,dailyCapacity)) };
   };
   let baseAlpha=0, baseCost=0;
