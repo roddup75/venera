@@ -555,6 +555,34 @@ Side, spread and volatility & Recommended & Category / bp / decimal & Used for r
 \bottomrule
 \end{longtable}
 
+\normalsize
+\subsection{Clarification: contribution to notional-weighted participation}
+The Overview statistic labelled average weighted trade size is the intended-notional-weighted
+mean parent-order participation. Let $w_b$ be bucket $b$'s share of traded dollars and let
+$\bar p_b$ be the calibrated notional-weighted mean participation within that bucket. The bucket's
+contribution to the portfolio average is
+\begin{equation}\label{eq:bucketcontribution}
+ C_b=w_b\bar p_b,\qquad \bar p=\sum_b C_b.
+\end{equation}
+Here $C_b$ and $\bar p$ are expressed in percentage points of ADV when $\bar p_b$ is quoted as a
+percentage. A bucket weight is first converted from percent to a decimal before multiplication.
+
+For the default Swiss 0--1\% ADV bucket, the traded-dollar share is 28.9064\%, or 0.289064, and
+the calibrated within-bucket mean participation is 0.7063\% ADV. Its contribution is therefore
+\begin{equation}\label{eq:bucketcontributionexample}
+ C_{0\text{--}1\%}=0.289064\times0.7063\%=0.2042\%\text{ ADV}
+ \simeq 0.20\text{ percentage points}.
+\end{equation}
+The 0.20 percentage-point result is not 20\% of the portfolio and is not the fraction of parent
+orders in the bucket. The source's 28.91\% and 26.01\% fields are traded-dollar shares for the
+0--1\% and 1--5\% buckets. Parent-order count shares instead come from the observed counts:
+$801/971=82.49\%$ and $113/971=11.64\%$. Summing equation~\eqref{eq:bucketcontribution}
+over all calibrated buckets gives 10.3236\% ADV. The result exceeds the typical order's
+participation because the relatively few high-participation orders carry disproportionate traded
+notional. A count-weighted mean answers a different question and is approximately 1.8\% ADV in
+the same case.
+
+\small
 \section{User-set policy and scenario parameters}
 \begin{longtable}{@{}p{0.25\textwidth}p{0.14\textwidth}p{0.17\textwidth}p{0.36\textwidth}@{}}
 \caption{Parameters chosen or approved by the user}\label{tab:policy}\\
