@@ -202,6 +202,14 @@ with st.sidebar:
         key=main_key + "competition_aum",
     )
     st.caption("Optional reference lines on both Overview charts. Enter values in USD billions.")
+    if st.button(
+        "Refresh analysis",
+        type="primary",
+        width="stretch",
+        help="Clear the model cache and recalculate every chart using the current inputs.",
+    ):
+        orders.clear()
+        st.rerun()
 
 
 def parse_marker(raw: str, label: str, color: str, dash: str) -> tuple[dict[str, float | str] | None, str | None]:
