@@ -582,6 +582,40 @@ participation because the relatively few high-participation orders carry disprop
 notional. A count-weighted mean answers a different question and is approximately 1.8\% ADV in
 the same case.
 
+\subsection{Interpretation of curve shape}
+The Overview chart places average theoretical impact and notional-weighted parent-order
+participation against AUM. The two series have different shapes because they represent different
+parts of the model.
+
+The fitted impact function $c(p)=a+bp^\gamma$ has $\gamma=0.386<1$ in the Swiss calibration and is
+therefore concave in participation. This shape is consistent with the supplied expected-cost
+buckets: cost rises materially through the middle buckets but changes only from 22.45 bp to
+22.48 bp between the 25--50\% and 50--100\% ADV buckets. The execution rule further limits daily
+participation to $\widetilde p=\min(p,\rho)$. Larger parent orders are therefore spread over more
+days rather than charged as if their full participation were executed in one session. Under the
+current case, average theoretical impact rises from approximately 8.69 bp at USD 3.4 billion to
+10.28 bp at USD 15 billion. Additional pressure appears in alpha delay and unfinished notional,
+which should be read alongside the impact series.
+
+By contrast, weighted participation is linear in AUM under fixed holdings, market ADV and
+liquidity preference. Equations~\eqref{eq:advscaling} and~\eqref{eq:advweights} imply
+\begin{equation}\label{eq:linearparticipation}
+ p'_k(A)=p_k\frac{A}{A_\star},\qquad
+ \bar p(A)=\sum_k\omega_kp'_k(A)
+ =\bar p(A_\star)\frac{A}{A_\star}.
+\end{equation}
+The linear mean does not imply that the liquidity distribution is benign. As AUM rises, individual
+orders cross bucket boundaries and the shares above 10\%, 25\%, 50\% and 100\% ADV can change
+rapidly. Tail percentiles, threshold exceedance shares, multi-day orders and unfinished notional
+are therefore more informative about nonlinear liquidity pressure than the mean alone.
+
+A convex impact curve would require $\gamma>1$ or an additional crowding, spread, volatility or
+liquidity-risk term and should be supported by an appropriate recalibration sample. A nonlinear
+mean-participation curve would require an AUM-dependent mechanism such as changing holdings,
+endogenous migration toward less-liquid securities, market-volume stress or binding finite-universe
+constraints. These are alternative scenario assumptions rather than implications of the current
+fixed-composition scaling rule.
+
 \small
 \section{User-set policy and scenario parameters}
 \begin{longtable}{@{}p{0.25\textwidth}p{0.14\textwidth}p{0.17\textwidth}p{0.36\textwidth}@{}}
