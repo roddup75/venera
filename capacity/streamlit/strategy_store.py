@@ -26,6 +26,7 @@ DEFAULT_PARAMETERS: dict[str, Any] = {
     "tracking_error": 1.3,
     "turnover": 13.9,
     "holdings": 40,
+    "universe_size": 203,
     "max_aum": 15.0,
     "daily": 10.0,
     "max_days": 10,
@@ -63,7 +64,8 @@ def load_strategies(path: Path = STORE_PATH) -> dict[str, dict[str, Any]]:
         if not isinstance(payload, dict):
             raise ValueError("Strategy file must contain a JSON object.")
         for name, strategy in payload.items():
-            validate_strategy(name, strategy.get("parameters", {}), strategy.get("buckets", []), strategy.get("adv_points", []))
+            strategy["parameters"] = {**DEFAULT_PARAMETERS, **strategy.get("parameters", {})}
+            validate_strategy(name, strategy["parameters"], strategy.get("buckets", []), strategy.get("adv_points", []))
             strategies[name] = strategy
     return strategies
 
@@ -81,6 +83,10 @@ def validate_strategy(name: str, parameters: dict, buckets: list[dict], adv_poin
     missing_parameters = [key for key in DEFAULT_PARAMETERS if key not in parameters]
     if missing_parameters:
         raise ValueError("Missing strategy parameters: " + ", ".join(missing_parameters))
+    if int(parameters["universe_size"]) < 2:
+        raise ValueError("Trading-universe size must be at least two stocks.")
+    if int(parameters["holdings"]) > int(parameters["universe_size"]):
+        raise ValueError("Average holdings cannot exceed the trading-universe size.")
 
     bucket_frame = pd.DataFrame(buckets)
     if bucket_frame.empty or any(column not in bucket_frame for column in BUCKET_COLUMNS):
@@ -105,7 +111,7 @@ def validate_strategy(name: str, parameters: dict, buckets: list[dict], adv_poin
     if (adv_frame["percentile"].diff().dropna() <= 0).any() or (adv_frame["advUsd"].diff().dropna() <= 0).any():
         raise ValueError("ADV percentile points and values must increase strictly.")
     try:
-        calibrate_orders(0.0, bucket_frame, adv_frame)
+        calibrate_orders(0.0, bucket_frame, adv_frame, int(parameters["universe_size"]))
     except ValueError as error:
         raise ValueError(f"Liquidity buckets cannot be reconciled with the ADV distribution: {error}") from error
 

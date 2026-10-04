@@ -44,6 +44,8 @@ The Streamlit version reads the same live bucket and ADV calibration JSON files 
 dashboard and recalculates the ADV and Burr models when inputs change.
 Its Strategy creator saves model defaults, liquidity buckets and ADV distributions as named cases;
 select a saved case from the sidebar to load it throughout the Capacity Lab.
+The saved trading-universe size constrains holdings and determines the finite stock-count grid used
+to interpolate the ADV percentile distribution (Swiss default: 203 stocks).
 
 Run its model tests with:
 

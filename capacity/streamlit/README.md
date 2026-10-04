@@ -35,3 +35,5 @@ Streamlit normally opens `http://localhost:8501`. Stop it with `Ctrl+C`.
 Use **Strategy creator** to start from an existing case, edit its Capacity Lab defaults and input tables, and save it under a new or existing name. The **Saved strategy** menu in the sidebar loads the selected strategy throughout the dashboard.
 
 The Swiss case is built in. User-created cases are stored locally in `data/strategies.user.json`; this runtime file is excluded from Git so private calibration data is not committed accidentally. Back up that file separately if the saved strategies need to move to another computer.
+
+Each strategy also stores its trading-universe size. The Swiss default is 203 stocks. Holdings cannot exceed the eligible universe, and the ADV calibration converts the percentile curve into a finite stock-count grid (using every stock up to 1,000 names and a 1,000-point approximation for larger universes).

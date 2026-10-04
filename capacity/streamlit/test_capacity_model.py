@@ -27,6 +27,11 @@ class CapacityModelTests(unittest.TestCase):
         np.testing.assert_allclose(self.engine.count_shares(6.8), slow.count_shares(6.8))
         self.assertFalse(np.allclose(self.engine.execution_shares(6.8), slow.execution_shares(6.8)))
 
+    def test_universe_size_sets_finite_adv_grid(self):
+        small = calibrate_orders(universe_size=25)
+        self.assertEqual(len(small), len(BUCKETS) * 25 * 16)
+        self.assertAlmostEqual(small["count"].sum(), BUCKETS.trades.sum(), places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

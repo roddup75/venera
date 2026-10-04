@@ -8,13 +8,13 @@
 \numberwithin{equation}{section}
 \pagestyle{fancy}\fancyhf{}
 \lhead{Long-Only Capacity Methodology}
-\rhead{Revised 2 October 2026}
+\rhead{Revised 4 October 2026}
 \cfoot{\thepage}\setlength{\headheight}{14pt}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \title{\textbf{Long-Only Equity Capacity Methodology}\\[0.4em]
 \large Distributional Liquidity Migration, Execution Horizons and Alpha Decay}
 \author{Rodrigo Dupleich\thanks{with the help of ChatGTP}}
-\date{2 October 2026}
+\date{4 October 2026}
 
 \begin{document}
 \maketitle
@@ -112,7 +112,13 @@ successive points in log dollars:
  L(r)=\exp\{(1-t)\log L_j+t\log L_{j+1}\},\qquad
  t=\frac{r-r_j}{r_{j+1}-r_j}.
 \end{equation}
-The current quadrature uses 100 midpoint percentile ranks and 16 evenly spaced interior
+Let $U$ be the number of eligible stocks. The Streamlit implementation converts the continuous
+percentile curve into a finite stock-count grid with
+\begin{equation}\label{eq:universegrid}
+ M=\min(U,1000),\qquad r_m=\frac{m-1/2}{M},\quad m=1,\ldots,M.
+\end{equation}
+Thus universes of at most 1,000 names use one midpoint rank per eligible stock; larger universes
+use a 1,000-point approximation. Each rank is combined with 16 evenly spaced interior
 participation points within each bucket. A candidate cell $k$ in bucket $b$ has ADV $L_k$,
 participation $p_k\in(\ell_b,u_b)$ and ticket $Q_k=p_kL_k$.
 Its positive prior weight is proportional to
@@ -141,7 +147,8 @@ underidentified allocation. It does not impose equal trading shares across unive
 reconstruct the actual 40-stock portfolio.
 
 \subsection{Scenario scaling and migration}\label{sec:advscaling}
-For scenario AUM $A$, holdings $H$ and decimal one-way turnover $T$, the ADV model uses
+For scenario AUM $A$, holdings $H$ and decimal one-way turnover $T$, the ADV model requires
+$1\leq H\leq U$ and uses
 \begin{equation}\label{eq:advscaling}
  s_Q=\frac{A}{A_\star}\frac{H_\star}{H},\qquad
  s_N=\frac{H}{H_\star}\frac{T}{T_\star},\qquad
@@ -369,7 +376,8 @@ turnover. The dashboard's rounded 13.9\% scenario produces USD 945.2 million of 
 annual trading and approximately 971.7 expected orders at 40 holdings. This rounding difference
 is intentional; the calibration table itself reconciles to the exact historical totals.
 
-The 203-stock eligible universe has a one-year ADV lookback. The supplied percentile boundaries
+The 203-stock eligible universe has a one-year ADV lookback. It therefore uses 203 midpoint
+stock ranks in equation~\eqref{eq:universegrid}. The supplied percentile boundaries
 are shown below; they are not mean ADVs within deciles.
 \begin{center}
 \begin{tabular}{rrrrrrrrrrr}
@@ -437,12 +445,17 @@ streamlit run app.py
 On Windows PowerShell, the environment is activated with
 \verb|.venv\Scripts\Activate.ps1|. Streamlit normally opens
 \url{http://localhost:8501}; the server is stopped with \texttt{Ctrl+C}. The Streamlit version
-contains the Overview, Liquidity migration, Demo building blocks and Input data areas. It reads
+contains the Overview, Liquidity migration, Demo building blocks, Input data and Strategy creator
+areas. The built-in Swiss Strategy has 203 eligible stocks. The Strategy creator saves a named
+case containing dashboard defaults, liquidity buckets, universe size and ADV percentiles in the
+local \verb|data/strategies.user.json| file; saving an existing name replaces its local record.
+The sidebar selector loads the selected case throughout the Capacity Lab. The saved universe size
+constrains holdings and sets the finite grid in equation~\eqref{eq:universegrid}. The application reads
 the live bucket and ADV JSON files used by the TypeScript dashboard and recalculates scenarios
 when AUM, turnover, holdings, participation, horizon, half-life or model controls change.
 The Streamlit model checks are run from its directory with
 \begin{verbatim}
-python -m unittest test_capacity_model.py
+python -m unittest discover -p 'test_*.py'
 \end{verbatim}
 \end{sloppypar}
 

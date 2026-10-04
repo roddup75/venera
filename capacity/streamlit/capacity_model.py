@@ -27,6 +27,7 @@ class Scenario:
     tracking_error: float = 1.3
     turnover: float = 13.9
     holdings: int = 40
+    universe_size: int = 203
     scale_elasticity: float = 0.85
     tail_elasticity: float = 0.0
     daily_participation: float = 10.0
@@ -59,15 +60,17 @@ def calibrate_orders(
     preference: float = 0.0,
     buckets: pd.DataFrame | None = None,
     adv_points: pd.DataFrame | None = None,
+    universe_size: int = 203,
 ) -> pd.DataFrame:
     bucket_data = BUCKETS if buckets is None else buckets.reset_index(drop=True)
     points = ADV_POINTS if adv_points is None else adv_points.reset_index(drop=True)
+    stock_grid_size = max(2, min(int(universe_size), 1000))
     rows: list[dict] = []
     for bucket, b in bucket_data.iterrows():
         mean = b.valueUsdMillion * 1e6 / b.trades
         cells = []
-        for j in range(100):
-            q = (j + 0.5) / 100
+        for j in range(stock_grid_size):
+            q = (j + 0.5) / stock_grid_size
             adv = adv_at(q, points)
             for k in range(16):
                 participation = b.lower + (b.upper - b.lower) * (k + 0.5) / 16
@@ -142,8 +145,9 @@ class AdvEngine:
         return required, days, fraction, alpha, cost
 
     def _distribution(self, aum_bn: float) -> dict:
-        size = max(aum_bn, 0.0001) / self.anchor_aum * self.anchor_holdings / max(self.p.holdings, 1)
-        frequency = max(self.p.holdings, 1) / self.anchor_holdings * max(self.p.turnover, 0) / 100 / self.historical_turnover
+        holdings = min(max(self.p.holdings, 1), max(self.p.universe_size, 1))
+        size = max(aum_bn, 0.0001) / self.anchor_aum * self.anchor_holdings / holdings
+        frequency = holdings / self.anchor_holdings * max(self.p.turnover, 0) / 100 / self.historical_turnover
         ticket = self.orders.ticket.to_numpy() * size
         adv = self.orders.adv.to_numpy() * max(self.p.adv_volume, 0.01) / 100
         count = self.orders["count"].to_numpy() * frequency

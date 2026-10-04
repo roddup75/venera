@@ -46,8 +46,13 @@ st.markdown("""
 
 
 @st.cache_data(show_spinner=False)
-def orders(preference: float, buckets: pd.DataFrame, adv_points: pd.DataFrame) -> pd.DataFrame:
-    return calibrate_orders(preference, buckets, adv_points)
+def orders(
+    preference: float,
+    buckets: pd.DataFrame,
+    adv_points: pd.DataFrame,
+    universe_size: int,
+) -> pd.DataFrame:
+    return calibrate_orders(preference, buckets, adv_points, universe_size)
 
 
 def style_figure(fig: go.Figure) -> go.Figure:
@@ -141,7 +146,22 @@ with st.sidebar:
     gross_alpha = st.number_input("Gross alpha (%)", 0.0, 100.0, float(saved["gross_alpha"]), .05, key=main_key + "gross_alpha")
     tracking_error = st.number_input("Tracking error (%)", .01, 100.0, float(saved["tracking_error"]), .1, key=main_key + "tracking_error")
     turnover = st.number_input("One-way turnover (%)", 0.0, 1000.0, float(saved["turnover"]), .1, key=main_key + "turnover")
-    holdings = st.number_input("Average holdings", 1, 10000, int(saved["holdings"]), 1, key=main_key + "holdings")
+    universe_size = st.number_input(
+        "Trading-universe size",
+        2, 100000, int(saved["universe_size"]), 1,
+        key=main_key + "universe_size",
+        help="Number of eligible stocks represented by the ADV percentile distribution.",
+    )
+    holdings_key = main_key + "holdings"
+    if holdings_key in st.session_state and int(st.session_state[holdings_key]) > int(universe_size):
+        st.session_state[holdings_key] = int(universe_size)
+    holdings_initial = {} if holdings_key in st.session_state else {
+        "value": min(int(saved["holdings"]), int(universe_size)),
+    }
+    holdings = st.number_input(
+        "Average holdings", min_value=1, max_value=int(universe_size), step=1,
+        key=holdings_key, **holdings_initial,
+    )
     max_aum = st.number_input("Chart horizon ($bn)", 1.0, 1000.0, float(saved["max_aum"]), 1.0, key=main_key + "max_aum")
     st.subheader("Migration and execution")
     daily = st.number_input("Daily participation (% ADV)", .1, 100.0, float(saved["daily"]), .5, key=main_key + "daily")
@@ -204,13 +224,13 @@ if outside_markers:
     )
 
 scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_error,
-                    turnover=turnover, holdings=int(holdings), scale_elasticity=eta,
+                    turnover=turnover, holdings=int(holdings), universe_size=int(universe_size), scale_elasticity=eta,
                     tail_elasticity=kappa, daily_participation=daily, max_days=int(max_days),
                     half_life=half_life, adv_volume=adv_volume,
                     burr_c=float(saved["burr_c"]), burr_d=float(saved["burr_d"]),
                     burr_scale=float(saved["burr_scale"]), impact_a=float(saved["impact_a"]),
                     impact_b=float(saved["impact_b"]), impact_gamma=float(saved["impact_gamma"]))
-selected_orders = orders(preference, strategy_buckets, strategy_adv_points)
+selected_orders = orders(preference, strategy_buckets, strategy_adv_points, int(universe_size))
 engine = (AdvEngine(
               scenario, selected_orders, strategy_buckets,
               anchor_aum=float(saved["aum0"]), anchor_holdings=int(saved["holdings"]),
@@ -285,7 +305,13 @@ with demo:
             demo_aum_1 = c1.number_input("AUM 1 ($bn)", .01, 1000.0, float(aum0), .1, key="demo_aum_1")
             demo_aum_2 = c2.number_input("AUM 2 ($bn)", .01, 1000.0, float(aum0 * 2), .1, key="demo_aum_2")
             c1, c2, c3 = st.columns(3)
-            demo_holdings = c1.number_input("Average holdings", 1, 203, int(holdings), 1, key="demo_aum_holdings")
+            if "demo_aum_holdings" in st.session_state and int(st.session_state["demo_aum_holdings"]) > int(universe_size):
+                st.session_state["demo_aum_holdings"] = int(universe_size)
+            demo_holdings_initial = {} if "demo_aum_holdings" in st.session_state else {"value": int(holdings)}
+            demo_holdings = c1.number_input(
+                "Average holdings", min_value=1, max_value=int(universe_size), step=1,
+                key="demo_aum_holdings", **demo_holdings_initial,
+            )
             demo_adv_volume = c2.number_input("Market ADV level (%)", 1.0, 300.0, 100.0, 5.0, key="demo_aum_adv")
             demo_preference_label = c3.selectbox(
                 "Liquidity preference",
@@ -300,11 +326,12 @@ with demo:
             demo_scenario = replace(
                 scenario,
                 holdings=int(demo_holdings),
+                universe_size=int(universe_size),
                 adv_volume=float(demo_adv_volume),
             )
             demo_engine = AdvEngine(
                 demo_scenario,
-                orders(demo_preference, strategy_buckets, strategy_adv_points),
+                orders(demo_preference, strategy_buckets, strategy_adv_points, int(universe_size)),
                 strategy_buckets,
                 anchor_aum=float(saved["aum0"]),
                 anchor_holdings=int(saved["holdings"]),
@@ -367,9 +394,17 @@ with demo:
 with inputs:
     st.subheader("Liquidity calibration inputs")
     st.caption(f"Active strategy: {selected_strategy_name}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Trading-universe size", f"{int(universe_size):,} stocks")
+    c2.metric("Average holdings", f"{int(holdings):,}")
+    c3.metric("Universe coverage", f"{100 * int(holdings) / int(universe_size):.1f}%")
     display = strategy_buckets.rename(columns={"label": "Participation bucket", "trades": "Parent orders", "valueUsdMillion": "Value (USD m)", "share": "Notional share (%)", "cost": "Expected impact (bp)", "realised": "Realised impact (bp)"})
     st.dataframe(display[["Participation bucket", "Parent orders", "Value (USD m)", "Notional share (%)", "Expected impact (bp)", "Realised impact (bp)"]], width="stretch", hide_index=True)
     st.subheader("Trading-universe ADV distribution")
+    st.caption(
+        f"The percentile curve represents {int(universe_size):,} eligible stocks; the calibration "
+        "uses a finite stock-count grid (up to 1,000 points)."
+    )
     adv_display = strategy_adv_points.rename(columns={"percentile": "Percentile", "advUsd": "ADV (USD)"})
     st.dataframe(adv_display, width="stretch", hide_index=True)
 
@@ -408,10 +443,20 @@ with creator:
         creator_aum0 = c1.number_input("Current AUM ($bn)", .1, 1000.0, float(creator_defaults["aum0"]), .1, key=creator_key + "aum0")
         creator_alpha = c2.number_input("Gross alpha (%)", 0.0, 100.0, float(creator_defaults["gross_alpha"]), .05, key=creator_key + "gross_alpha")
         creator_te = c3.number_input("Tracking error (%)", .01, 100.0, float(creator_defaults["tracking_error"]), .1, key=creator_key + "tracking_error")
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         creator_turnover = c1.number_input("One-way turnover (%)", 0.0, 1000.0, float(creator_defaults["turnover"]), .1, key=creator_key + "turnover")
-        creator_holdings = c2.number_input("Average holdings", 1, 10000, int(creator_defaults["holdings"]), 1, key=creator_key + "holdings")
-        creator_horizon = c3.number_input("Chart horizon ($bn)", 1.0, 1000.0, float(creator_defaults["max_aum"]), 1.0, key=creator_key + "max_aum")
+        creator_universe = c2.number_input("Trading-universe size", 2, 100000, int(creator_defaults["universe_size"]), 1, key=creator_key + "universe_size")
+        creator_holdings_key = creator_key + "holdings"
+        if creator_holdings_key in st.session_state and int(st.session_state[creator_holdings_key]) > int(creator_universe):
+            st.session_state[creator_holdings_key] = int(creator_universe)
+        creator_holdings_initial = {} if creator_holdings_key in st.session_state else {
+            "value": min(int(creator_defaults["holdings"]), int(creator_universe)),
+        }
+        creator_holdings = c3.number_input(
+            "Average holdings", min_value=1, max_value=int(creator_universe), step=1,
+            key=creator_holdings_key, **creator_holdings_initial,
+        )
+        creator_horizon = c4.number_input("Chart horizon ($bn)", 1.0, 1000.0, float(creator_defaults["max_aum"]), 1.0, key=creator_key + "max_aum")
 
         st.markdown("#### Migration, execution, and decisions")
         c1, c2, c3 = st.columns(3)
@@ -492,6 +537,7 @@ with creator:
                 "tracking_error": float(creator_te),
                 "turnover": float(creator_turnover),
                 "holdings": int(creator_holdings),
+                "universe_size": int(creator_universe),
                 "max_aum": float(creator_horizon),
                 "daily": float(creator_daily),
                 "max_days": int(creator_max_days),
