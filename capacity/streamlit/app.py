@@ -249,7 +249,13 @@ with overview:
     cols = st.columns(4)
     cols[0].metric("Current net IR", f"{base['Net IR']:.2f}", "Above threshold" if base["Net IR"] >= minimum_ir else "Below threshold")
     crossing = data.loc[data["Net IR"] <= minimum_ir, "AUM"]
-    cols[1].metric("IR capacity", f"${crossing.iloc[0]:.1f}bn" if len(crossing) else f"> ${max_aum:.0f}bn")
+    cols[1].metric(
+        "AUM at minimum net IR",
+        f"${crossing.iloc[0]:.1f}bn" if len(crossing) else f"> ${max_aum:.0f}bn",
+        f"Minimum net IR = {minimum_ir:.2f}",
+        delta_color="off",
+        help="First AUM on the scenario curve where net information ratio reaches or falls below the selected minimum.",
+    )
     cols[2].metric("Alpha capture at 2×", f"{twice['Alpha capture (%)']:.1f}%")
     cols[3].metric(
         "Average execution at 2×",
