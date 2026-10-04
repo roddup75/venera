@@ -409,6 +409,36 @@ At 10\% daily participation, equation~\eqref{eq:averageexecution} gives approxim
 day for the calibrated current-AUM parent orders and 0.35 day at twice current AUM. These are
 count-weighted fractional completion times. Whole-day execution buckets still round orders up for
 alpha-delay and multi-day diagnostics.
+
+\paragraph{Worked migration example.}
+Hold the Swiss strategy at 40 holdings, 13.9\% one-way turnover and observed market ADV. Increasing
+AUM from USD 3.4 billion to USD 6.8 billion gives $s_Q=2$ and $s_N=1$ in
+equation~\eqref{eq:advscaling}. Every synthetic parent order doubles in size, the expected annual
+parent-order count remains approximately 972, and intended annual trading doubles from about
+USD 945.2 million to USD 1.8904 billion. Because ADV is unchanged, each order's participation also
+doubles: an order at 0.7\% ADV moves to 1.4\%, an order at 3\% moves to 6\%, and an order at 40\%
+moves to 80\%. Reassigning every calibrated order produces the following migration.
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{Parent-order count share} & \multicolumn{2}{c}{Traded-dollar share}\\
+Participation bucket & USD 3.4bn & USD 6.8bn & USD 3.4bn & USD 6.8bn\\
+\midrule
+0--1\% ADV    & 82.49\% & 29.47\% & 28.91\% &  6.72\%\\
+1--5\% ADV    & 11.64\% & 56.36\% & 26.01\% & 27.09\%\\
+5--10\% ADV   &  3.40\% &  8.30\% & 17.98\% & 21.10\%\\
+10--25\% ADV  &  1.85\% &  3.70\% & 16.58\% & 20.14\%\\
+25--50\% ADV  &  0.51\% &  1.56\% &  9.18\% & 14.41\%\\
+50--100\% ADV &  0.10\% &  0.51\% &  1.34\% &  9.18\%\\
+$>$100\% ADV  &  0.00\% &  0.10\% &  0.00\% &  1.34\%\\
+\bottomrule
+\end{tabular}
+\end{center}
+The number of orders does not increase in this example; the same frequency is redistributed toward
+higher participation buckets. Count shares and dollar shares differ because a small number of large
+orders can represent a disproportionate share of traded value. Changing holdings or turnover would
+activate the additional scaling channel $s_N$ rather than this pure AUM-size experiment.
+
 With 40 assumed holdings and unchanged frequency, doubling AUM doubles every synthetic ticket;
 annual order count remains unchanged. With the same AUM and twice the holdings, tickets halve
 and frequency doubles. With twice the turnover alone, frequency doubles but participation
