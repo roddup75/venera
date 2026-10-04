@@ -32,6 +32,12 @@ class CapacityModelTests(unittest.TestCase):
         self.assertEqual(len(small), len(BUCKETS) * 25 * 16)
         self.assertAlmostEqual(small["count"].sum(), BUCKETS.trades.sum(), places=6)
 
+    def test_average_execution_is_fractional_and_count_weighted(self):
+        current = self.engine.metric(3.4)["Average days"]
+        twice = self.engine.metric(6.8)["Average days"]
+        self.assertLess(current, 1.0)
+        self.assertAlmostEqual(twice, current * 2, places=7)
+
 
 if __name__ == "__main__":
     unittest.main()

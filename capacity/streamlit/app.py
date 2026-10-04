@@ -251,7 +251,11 @@ with overview:
     crossing = data.loc[data["Net IR"] <= minimum_ir, "AUM"]
     cols[1].metric("IR capacity", f"${crossing.iloc[0]:.1f}bn" if len(crossing) else f"> ${max_aum:.0f}bn")
     cols[2].metric("Alpha capture at 2×", f"{twice['Alpha capture (%)']:.1f}%")
-    cols[3].metric("Average execution at 2×", f"{twice['Average days']:.1f} days")
+    cols[3].metric(
+        "Average execution at 2×",
+        f"{twice['Average days']:.2f} days",
+        help="Count-weighted fractional completion time: parent-order participation divided by the daily ADV participation rate.",
+    )
     fig = px.line(data, x="AUM", y="Net IR", title="Net information ratio", color_discrete_sequence=[GREEN])
     fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
     add_aum_markers(fig, aum_markers, max_aum)
@@ -262,7 +266,10 @@ with overview:
     add_aum_markers(fig, aum_markers, max_aum)
     fig.update_layout(xaxis_title="AUM (USD bn)")
     st.plotly_chart(style_figure(fig), width="stretch")
-    st.dataframe(pd.DataFrame([base, twice, four]).round(3), width="stretch", hide_index=True)
+    scenario_table = pd.DataFrame([base, twice, four]).rename(
+        columns={"Average days": "Avg execution (days)"},
+    )
+    st.dataframe(scenario_table.round(3), width="stretch", hide_index=True)
     retained_cross = data.loc[data["Retained alpha (%)"] <= retained_threshold, "AUM"]
     if len(retained_cross):
         st.info(f"Retained alpha falls through {retained_threshold:.0f}% near ${retained_cross.iloc[0]:.1f}bn.")

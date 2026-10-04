@@ -157,11 +157,15 @@ class AdvEngine:
         values = np.bincount(bucket, weights=ticket * count, minlength=len(self.buckets) + 1)
         required, _, fraction, alpha, cost = self._execution(participation)
         historical_weights = self.orders.ticket.to_numpy() * self.orders["count"].to_numpy() / self.base_value
+        count_total = float(count.sum())
+        average_execution_days = (
+            float(np.dot(count, participation / self.rho) / count_total) if count_total else 0.0
+        )
         return {
             "counts": counts, "values": values,
             "alpha_raw": float(np.dot(historical_weights, alpha)),
             "cost_raw": float(np.dot(historical_weights, fraction * cost)),
-            "avg_days": float(np.dot(historical_weights, required)),
+            "avg_days": average_execution_days,
             "multi": float(np.dot(historical_weights, required >= 2)),
             "three": float(np.dot(historical_weights, required >= 3)),
             "mean_participation": float(np.dot(historical_weights, participation)),
@@ -272,7 +276,8 @@ class BurrEngine:
             "Alpha capture (%)": capture_pct, "After delay (%)": implemented,
             "Net alpha (%)": net_alpha, "Net IR": net_alpha / max(self.p.tracking_error, .01),
             "Retained alpha (%)": 100 * net_alpha / max(self.p.gross_alpha, .01),
-            "Average days": float(days.mean()), "Multi-day (%)": float((days >= 2).mean() * 100),
+            "Average days": float(np.mean(participation / (self.p.daily_participation / 100))),
+            "Multi-day (%)": float((days >= 2).mean() * 100),
             "3+ days (%)": float((days >= 3).mean() * 100), "Mean participation (%)": float(participation.mean() * 100),
             "Unfinished notional (%)": 0.0,
         }

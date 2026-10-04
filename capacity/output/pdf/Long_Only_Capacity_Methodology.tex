@@ -200,8 +200,16 @@ orders as complete. Required days, scheduled days and completion fraction are
  d_k=\min(D_{\max},D_k^{\rm req}),\qquad
  e_k=\min(1,D_{\max}\rho/p'_k).
 \end{equation}
-The implementation floors $D_{\max}$ to a positive integer. Required-day averages use
-$D_k^{\rm req}$, not $d_k$. Impact uses $\widetilde p_k=\min(p'_k,\rho)$ as a daily-rate proxy.
+The implementation floors $D_{\max}$ to a positive integer. The dashboard's average-execution
+statistic is the count-weighted fractional completion
+time
+\begin{equation}\label{eq:averageexecution}
+ \bar\tau(A)=\frac{\sum_k\nu'_k(p'_k/\rho)}{\sum_k\nu'_k}.
+\end{equation}
+It may therefore be below one day when most parent orders use less than one daily participation
+allowance. The integer $D_k^{\rm req}$ remains the conservative scheduling input for alpha decay,
+completion and multi-day classifications. Impact uses
+$\widetilde p_k=\min(p'_k,\rho)$ as a daily-rate proxy.
 This proxy approximates a participation-capped schedule and does not model the smaller final
 slice separately. Alpha capture uses equal slices over $d_k$ for the completed fraction.
 These two scheduling approximations should be refined together when daily executions are available.
@@ -341,6 +349,14 @@ branch $2AT$ is intended annual trading; completion is already included through 
 not be applied again. Declining costs caused by non-completion are not evidence of improved
 execution: $U$ and captured alpha must be read alongside costs.
 
+\paragraph{Interpretive note: after-delay versus net alpha.}
+After-delay alpha contains the loss from slower implementation but has not yet deducted market
+impact. Net alpha subtracts annual trading-cost drag. In the default Swiss reference case,
+$R_{g,\star}=0.5000\%$, captured alpha is 100\% by reference normalisation, expected impact is
+8.69 bp and $T=13.9\%$. Equation~\eqref{eq:drag} gives 2.42 bp of annual drag, so after-delay
+alpha is 0.5000\% and net alpha is approximately 0.4758\%. Positive implementation cost therefore
+places the net-alpha curve below the after-delay curve even at the reference AUM.
+
 At the historical reference the normalisation reproduces the supplied alpha and weighted cost.
 Changing execution-policy controls also changes $G_\star$ and $K_{\rm ADV}$. Consequently the
 current engine compares relative AUM scenarios under each selected policy; it is not an absolute
@@ -389,6 +405,10 @@ Q0 & Q10 & Q20 & Q30 & Q40 & Q50 & Q60 & Q70 & Q80 & Q90 & Q100\\
 \end{tabular}\\[3pt]
 \small ADV in USD millions per day.
 \end{center}
+At 10\% daily participation, equation~\eqref{eq:averageexecution} gives approximately 0.17 trading
+day for the calibrated current-AUM parent orders and 0.35 day at twice current AUM. These are
+count-weighted fractional completion times. Whole-day execution buckets still round orders up for
+alpha-delay and multi-day diagnostics.
 With 40 assumed holdings and unchanged frequency, doubling AUM doubles every synthetic ticket;
 annual order count remains unchanged. With the same AUM and twice the holdings, tickets halve
 and frequency doubles. With twice the turnover alone, frequency doubles but participation
