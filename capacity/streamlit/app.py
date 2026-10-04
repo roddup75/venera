@@ -246,7 +246,7 @@ overview, liquidity, demo, inputs, creator = st.tabs([
 ])
 
 with overview:
-    cols = st.columns(4)
+    cols = st.columns(3)
     cols[0].metric("Current net IR", f"{base['Net IR']:.2f}", "Above threshold" if base["Net IR"] >= minimum_ir else "Below threshold")
     crossing = data.loc[data["Net IR"] <= minimum_ir, "AUM"]
     cols[1].metric(
@@ -256,11 +256,22 @@ with overview:
         delta_color="off",
         help="First AUM on the scenario curve where net information ratio reaches or falls below the selected minimum.",
     )
-    cols[2].metric("Alpha capture at 2×", f"{twice['Alpha capture (%)']:.1f}%")
-    cols[3].metric(
-        "Average execution at 2×",
-        f"{twice['Average days']:.2f} days",
+    cols[2].metric("Alpha capture at current AUM", f"{base['Alpha capture (%)']:.1f}%")
+    cols = st.columns(3)
+    cols[0].metric(
+        "Average execution at current AUM",
+        f"{base['Average days']:.2f} days",
         help="Count-weighted fractional completion time: parent-order participation divided by the daily ADV participation rate.",
+    )
+    cols[1].metric(
+        "Average weighted trade size",
+        f"{base['Mean participation (%)']:.2f}% ADV",
+        help="Intended-notional-weighted parent-order participation at the current AUM.",
+    )
+    cols[2].metric(
+        "Average theoretical impact cost",
+        f"{base['Impact (bp)']:.2f} bp",
+        help="Modeled theoretical impact averaged across intended traded notional at the current AUM.",
     )
     fig = px.line(data, x="AUM", y="Net IR", title="Net information ratio", color_discrete_sequence=[GREEN])
     fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
@@ -271,6 +282,28 @@ with overview:
     fig = px.line(alpha, x="AUM", y="Alpha (%)", color="Series", title="Alpha decomposition", color_discrete_sequence=[AMBER, RUST])
     add_aum_markers(fig, aum_markers, max_aum)
     fig.update_layout(xaxis_title="AUM (USD bn)")
+    st.plotly_chart(style_figure(fig), width="stretch")
+    fig = go.Figure()
+    fig.add_scatter(
+        x=data["AUM"], y=data["Impact (bp)"], mode="lines",
+        name="Average theoretical impact cost", line=dict(color=AMBER, width=3),
+        hovertemplate="AUM: $%{x:.2f}bn<br>Impact: %{y:.2f} bp<extra></extra>",
+    )
+    fig.add_scatter(
+        x=data["AUM"], y=data["Mean participation (%)"], mode="lines", yaxis="y2",
+        name="Average weighted trade size", line=dict(color=BLUE, width=3),
+        hovertemplate="AUM: $%{x:.2f}bn<br>Trade size: %{y:.2f}% ADV<extra></extra>",
+    )
+    fig.update_layout(
+        title="Theoretical impact cost and weighted trade size",
+        xaxis_title="AUM (USD bn)",
+        yaxis=dict(title="Average weighted theoretical impact cost (bp)"),
+        yaxis2=dict(
+            title="Average weighted trade size (% ADV)",
+            overlaying="y", side="right", showgrid=False,
+        ),
+        legend=dict(orientation="h", y=1.12),
+    )
     st.plotly_chart(style_figure(fig), width="stretch")
     scenario_table = pd.DataFrame([base, twice, four]).rename(
         columns={"Average days": "Avg execution (days)"},
