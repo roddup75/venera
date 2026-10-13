@@ -493,17 +493,29 @@ with backtest_ir:
         fit_gamma = float(backtest_gamma)
         current_backtest_ir = fit_a - fit_b * float(aum0) ** fit_gamma
         zero_aum = (fit_a / fit_b) ** (1 / fit_gamma) if fit_a > 0 and fit_b > 0 else np.nan
+        if fit_a <= minimum_ir:
+            minimum_ir_aum = 0.0
+        elif fit_b > 0:
+            minimum_ir_aum = ((fit_a - minimum_ir) / fit_b) ** (1 / fit_gamma)
+        else:
+            minimum_ir_aum = np.nan
         observed_x = np.asarray(ir_fit["x"], dtype=float)
         observed_y = np.asarray(ir_fit["y"], dtype=float)
         fitted_observations = fit_a - fit_b * observed_x ** fit_gamma
         residual_sse = float(np.sum((observed_y - fitted_observations) ** 2))
         total_sse = float(np.sum((observed_y - observed_y.mean()) ** 2))
         parameter_r_squared = 1.0 - residual_sse / total_sse if total_sse > 1e-16 else 1.0
-        metrics = st.columns(4)
+        metrics = st.columns(5)
         metrics[0].metric("Fitted IR at current AUM", f"{current_backtest_ir:.3f}")
-        metrics[1].metric("Zero-IR AUM", f"${zero_aum:.2f}bn" if np.isfinite(zero_aum) else "Not reached")
-        metrics[2].metric("Model R²", f"{parameter_r_squared:.4f}")
-        metrics[3].metric("Model γ", f"{fit_gamma:.3f}")
+        metrics[1].metric(
+            "AUM at minimum IR",
+            f"${minimum_ir_aum:.2f}bn" if np.isfinite(minimum_ir_aum) else "Not reached",
+            f"Minimum IR = {minimum_ir:.2f}",
+            delta_color="off",
+        )
+        metrics[2].metric("Zero-IR AUM", f"${zero_aum:.2f}bn" if np.isfinite(zero_aum) else "Not reached")
+        metrics[3].metric("Model R²", f"{parameter_r_squared:.4f}")
+        metrics[4].metric("Model γ", f"{fit_gamma:.3f}")
 
         fit_horizon = max(float(max_aum), float(observed_x.max()), float(aum0))
         fit_x = np.linspace(float(observed_x.min()), fit_horizon, 301)
