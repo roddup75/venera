@@ -52,6 +52,8 @@ The **Strategy creator** accepts AUM and information-ratio observations from opt
 backtests and saves them with the selected strategy. The **Backtest IR curve** tab starts from the
 fitted `IR(A) = a - b*A^gamma` parameters; the Capacity Lab sidebar can adjust them for the active
 analysis, while the Demo building blocks area provides an independent parameter demonstration.
+The **Summary** tab compares the capacity and backtest models using current-AUM IR, AUM at the
+selected minimum IR, and zero-IR AUM.
 
 Run its model tests with:
 

@@ -41,4 +41,6 @@ Each strategy also stores its trading-universe size and backtest IR table. The S
 
 Use **Strategy creator → Backtest IR observations** to enter at least three non-negative, unique AUM observations and **Save strategy** to persist edits. The **Backtest IR curve** tab starts from the fitted `IR(A) = a - b*A^gamma` parameters. They can be adjusted in the Capacity Lab sidebar for the active analysis, and the Demo building blocks area contains an independent backtest parameter demo. Every control starts from the selected strategy's saved parameters or fitted datasets. The empirical curve does not replace the execution-based net-IR calculation on the Overview tab.
 
+The **Summary** tab places the execution-based capacity model and empirical backtest model in one table. It reports each model's implied IR at current AUM, AUM at the selected minimum IR, and zero-IR AUM. Capacity-model crossings are evaluated within the selected chart horizon; backtest crossings are solved from the active curve parameters.
+
 The optional liquidity-deterioration elasticity `λ` stresses effective ADV as AUM grows: `λ = 0` preserves the linear baseline, while positive values make participation grow faster than AUM. The Overview tail-pressure chart reports traded notional above 10% and 25% ADV together with the notional-weighted 90th-percentile parent-order size.

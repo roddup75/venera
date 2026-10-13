@@ -366,20 +366,42 @@ engine = (AdvEngine(
           ))
 data = curve(engine, max_aum)
 base, twice, four = [engine.metric(aum0 * x) for x in (1, 2, 4)]
+capacity_minimum_crossing = data.loc[data["Net IR"] <= minimum_ir, "AUM"]
+capacity_zero_crossing = data.loc[data["Net IR"] <= 0.0, "AUM"]
+
+if strategy_ir_fit is not None and backtest_a is not None and backtest_b is not None and backtest_gamma is not None:
+    active_backtest_a = float(backtest_a)
+    active_backtest_b = float(backtest_b)
+    active_backtest_gamma = float(backtest_gamma)
+    current_backtest_ir = active_backtest_a - active_backtest_b * float(aum0) ** active_backtest_gamma
+    zero_aum = (
+        (active_backtest_a / active_backtest_b) ** (1 / active_backtest_gamma)
+        if active_backtest_a > 0 and active_backtest_b > 0 else np.nan
+    )
+    if active_backtest_a <= minimum_ir:
+        minimum_ir_aum = 0.0
+    elif active_backtest_b > 0:
+        minimum_ir_aum = (
+            (active_backtest_a - minimum_ir) / active_backtest_b
+        ) ** (1 / active_backtest_gamma)
+    else:
+        minimum_ir_aum = np.nan
+else:
+    active_backtest_a = active_backtest_b = active_backtest_gamma = np.nan
+    current_backtest_ir = zero_aum = minimum_ir_aum = np.nan
 
 st.title("Capacity Analysis")
 st.caption("Distributional liquidity migration, execution horizons, market impact and alpha decay")
-overview, backtest_ir, liquidity, demo, creator = st.tabs([
-    "Overview", "Backtest IR curve", "Liquidity migration", "Demo building blocks", "Strategy creator",
+overview, summary, backtest_ir, liquidity, demo, creator = st.tabs([
+    "Overview", "Summary", "Backtest IR curve", "Liquidity migration", "Demo building blocks", "Strategy creator",
 ])
 
 with overview:
     cols = st.columns(3)
     cols[0].metric("Current net IR", f"{base['Net IR']:.2f}", "Above threshold" if base["Net IR"] >= minimum_ir else "Below threshold")
-    crossing = data.loc[data["Net IR"] <= minimum_ir, "AUM"]
     cols[1].metric(
         "AUM at minimum net IR",
-        f"${crossing.iloc[0]:.1f}bn" if len(crossing) else f"> ${max_aum:.0f}bn",
+        f"${capacity_minimum_crossing.iloc[0]:.1f}bn" if len(capacity_minimum_crossing) else f"> ${max_aum:.0f}bn",
         f"Minimum net IR = {minimum_ir:.2f}",
         delta_color="off",
         help="First AUM on the scenario curve where net information ratio reaches or falls below the selected minimum.",
@@ -478,6 +500,40 @@ with overview:
     else:
         st.info(f"Retained alpha stays above {retained_threshold:.0f}% through ${max_aum:.0f}bn.")
 
+with summary:
+    st.subheader("Model capacity summary")
+    st.write(
+        "Side-by-side capacity indications from the active execution model and the empirical "
+        "optimised-backtest curve. Both use the current AUM and minimum IR selected in Capacity Lab."
+    )
+
+    def crossing_display(crossing: pd.Series) -> str:
+        return f"${float(crossing.iloc[0]):.2f}bn" if len(crossing) else f"> ${max_aum:.0f}bn"
+
+    comparison = pd.DataFrame([
+        {
+            "Model": "Capacity model",
+            "Implied IR at current AUM": f"{base['Net IR']:.3f}",
+            "AUM at minimum IR": crossing_display(capacity_minimum_crossing),
+            "AUM at zero IR": crossing_display(capacity_zero_crossing),
+        },
+        {
+            "Model": "Backtest model",
+            "Implied IR at current AUM": (
+                f"{current_backtest_ir:.3f}" if np.isfinite(current_backtest_ir) else "Unavailable"
+            ),
+            "AUM at minimum IR": (
+                f"${minimum_ir_aum:.2f}bn" if np.isfinite(minimum_ir_aum) else "Not reached"
+            ),
+            "AUM at zero IR": f"${zero_aum:.2f}bn" if np.isfinite(zero_aum) else "Not reached",
+        },
+    ]).set_index("Model")
+    st.dataframe(comparison, width="stretch")
+    st.caption(
+        f"Capacity-model crossings are evaluated through the ${max_aum:g}bn chart horizon. "
+        "Backtest crossings are solved directly from the active a, b, and γ parameters."
+    )
+
 with backtest_ir:
     st.subheader("IR curve from optimised backtests")
     st.write(
@@ -488,17 +544,9 @@ with backtest_ir:
         st.warning(f"The IR curve could not be fitted: {strategy_ir_fit_error}")
     else:
         ir_fit = strategy_ir_fit
-        fit_a = float(backtest_a)
-        fit_b = float(backtest_b)
-        fit_gamma = float(backtest_gamma)
-        current_backtest_ir = fit_a - fit_b * float(aum0) ** fit_gamma
-        zero_aum = (fit_a / fit_b) ** (1 / fit_gamma) if fit_a > 0 and fit_b > 0 else np.nan
-        if fit_a <= minimum_ir:
-            minimum_ir_aum = 0.0
-        elif fit_b > 0:
-            minimum_ir_aum = ((fit_a - minimum_ir) / fit_b) ** (1 / fit_gamma)
-        else:
-            minimum_ir_aum = np.nan
+        fit_a = active_backtest_a
+        fit_b = active_backtest_b
+        fit_gamma = active_backtest_gamma
         observed_x = np.asarray(ir_fit["x"], dtype=float)
         observed_y = np.asarray(ir_fit["y"], dtype=float)
         fitted_observations = fit_a - fit_b * observed_x ** fit_gamma

@@ -510,6 +510,10 @@ other inputs. The Backtest IR curve tab initializes $a$, $b$ and $\gamma$ from
 equation~\eqref{eq:backtestir}; the Capacity Lab sidebar can adjust them for the active analysis.
 An independent backtest demo exposes the same three parameters and starts from the selected
 strategy's fit. The empirical curve remains separate from modeled net IR.
+The Summary area places the two capacity indications side by side, reporting implied IR at current
+AUM, AUM at the selected minimum IR and zero-IR AUM. Execution-model crossings are evaluated
+within the selected chart horizon, while empirical backtest crossings are solved directly from
+$a$, $b$ and $\gamma$.
 
 Validation covers historical counts and values, percentile interpolation, annual trading
 conservation, volume-stress equivalence and infeasible calibration inputs. Quadrature density,
@@ -553,8 +557,8 @@ streamlit run app.py
 On Windows PowerShell, the environment is activated with
 \verb|.venv\Scripts\Activate.ps1|. Streamlit normally opens
 \url{http://localhost:8501}; the server is stopped with \texttt{Ctrl+C}. The Streamlit version
-contains the Overview, Backtest IR curve, Liquidity migration, Demo building blocks and Strategy
-creator areas. The built-in Swiss Strategy has 203 eligible stocks. The Strategy creator saves a
+contains the Overview, Summary, Backtest IR curve, Liquidity migration, Demo building blocks and
+Strategy creator areas. The built-in Swiss Strategy has 203 eligible stocks. The Strategy creator saves a
 named case containing dashboard defaults, liquidity buckets, universe size, ADV percentiles and
 backtest IR observations in the
 local \verb|data/strategies.user.json| file; saving an existing name replaces its local record.
