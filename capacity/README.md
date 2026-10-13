@@ -53,7 +53,8 @@ backtests and saves them with the selected strategy. The **Backtest IR curve** t
 fitted `IR(A) = a - b*A^gamma` parameters; the Capacity Lab sidebar can adjust them for the active
 analysis, while the Demo building blocks area provides an independent parameter demonstration.
 The **Summary** tab compares the capacity and backtest models using current-AUM IR, AUM at the
-selected minimum IR, and zero-IR AUM.
+selected minimum IR, and zero-IR AUM. It also compares implied IR at ×1, ×1.5, ×2, ×2.5 and ×3
+current AUM in separate tables and a grouped bar chart. The final Overview table uses the same grid.
 
 Run its model tests with:
 

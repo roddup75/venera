@@ -365,7 +365,10 @@ engine = (AdvEngine(
               scenario, strategy_buckets, impact_reference=impact_reference,
           ))
 data = curve(engine, max_aum)
-base, twice, four = [engine.metric(aum0 * x) for x in (1, 2, 4)]
+scenario_multipliers = [1.0, 1.5, 2.0, 2.5, 3.0]
+scenario_labels = [f"×{multiple:g}" for multiple in scenario_multipliers]
+scenario_metrics = [engine.metric(aum0 * multiple) for multiple in scenario_multipliers]
+base = scenario_metrics[0]
 capacity_minimum_crossing = data.loc[data["Net IR"] <= minimum_ir, "AUM"]
 capacity_zero_crossing = data.loc[data["Net IR"] <= 0.0, "AUM"]
 
@@ -490,9 +493,10 @@ with overview:
         "Tail measures reveal nonlinear bucket crossings that the weighted mean can conceal. "
         "Positive λ additionally makes effective ADV decline as AUM grows."
     )
-    scenario_table = pd.DataFrame([base, twice, four]).rename(
+    scenario_table = pd.DataFrame(scenario_metrics).rename(
         columns={"Average days": "Avg execution (days)"},
     )
+    scenario_table.insert(0, "AUM multiple", scenario_labels)
     st.dataframe(scenario_table.round(3), width="stretch", hide_index=True)
     retained_cross = data.loc[data["Retained alpha (%)"] <= retained_threshold, "AUM"]
     if len(retained_cross):
@@ -533,6 +537,47 @@ with summary:
         f"Capacity-model crossings are evaluated through the ${max_aum:g}bn chart horizon. "
         "Backtest crossings are solved directly from the active a, b, and γ parameters."
     )
+
+    capacity_scenarios = pd.DataFrame({
+        "AUM multiple": scenario_labels,
+        "AUM (USD bn)": [metric["AUM"] for metric in scenario_metrics],
+        "Implied IR": [metric["Net IR"] for metric in scenario_metrics],
+    })
+    backtest_scenarios = pd.DataFrame({
+        "AUM multiple": scenario_labels,
+        "AUM (USD bn)": [aum0 * multiple for multiple in scenario_multipliers],
+        "Implied IR": [
+            active_backtest_a - active_backtest_b * (aum0 * multiple) ** active_backtest_gamma
+            if np.isfinite(active_backtest_a) else np.nan
+            for multiple in scenario_multipliers
+        ],
+    })
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("#### Capacity model scenarios")
+        st.dataframe(capacity_scenarios.round(3), width="stretch", hide_index=True)
+    with c2:
+        st.markdown("#### Backtest model scenarios")
+        st.dataframe(backtest_scenarios.round(3), width="stretch", hide_index=True)
+
+    bar_data = pd.concat([
+        capacity_scenarios.assign(Model="Capacity model"),
+        backtest_scenarios.assign(Model="Backtest model"),
+    ], ignore_index=True)
+    fig = px.bar(
+        bar_data,
+        x="AUM multiple", y="Implied IR", color="Model", barmode="group",
+        title="Implied IR across AUM scenarios", color_discrete_sequence=[GREEN, AMBER],
+        category_orders={"AUM multiple": scenario_labels},
+        custom_data=["AUM (USD bn)"],
+    )
+    fig.update_traces(
+        hovertemplate="Scenario: %{x}<br>AUM: $%{customdata[0]:.2f}bn<br>Implied IR: %{y:.3f}<extra></extra>"
+    )
+    fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
+    fig.add_hline(y=0, line_color="#8b9390", line_width=1)
+    fig.update_layout(xaxis_title="Current-AUM multiple", yaxis_title="Implied information ratio")
+    st.plotly_chart(style_figure(fig), width="stretch")
 
 with backtest_ir:
     st.subheader("IR curve from optimised backtests")
