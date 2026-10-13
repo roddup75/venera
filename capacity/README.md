@@ -42,12 +42,15 @@ On Windows PowerShell, replace the activation command with:
 Streamlit normally opens http://localhost:8501. Stop the server with `Ctrl+C`.
 The Streamlit version reads the same live bucket and ADV calibration JSON files as the browser
 dashboard and recalculates the ADV and Burr models when inputs change.
-Its Strategy creator saves model defaults, liquidity buckets and ADV distributions as named cases;
+Its Strategy creator saves model defaults, liquidity buckets, ADV distributions and backtest IR observations as named cases;
 select a saved case from the sidebar to load it throughout the Capacity Lab.
 The saved trading-universe size constrains holdings and determines the finite stock-count grid used
 to interpolate the ADV percentile distribution (Swiss default: 203 stocks).
 An optional liquidity-deterioration elasticity stresses effective ADV as AUM grows, while the
 Overview tail chart reports threshold exceedances and the weighted 90th-percentile trade size.
+The **Backtest IR curve** tab accepts AUM and information-ratio observations from optimised
+historical backtests and fits the decreasing curve `IR(A) = a - b*A^gamma`. The table can be saved
+with the selected strategy and remains separate from the execution-based net-IR model.
 
 Run its model tests with:
 

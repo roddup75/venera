@@ -18,6 +18,11 @@ BUCKET_COLUMNS = [
     "label", "lower", "upper", "p", "share", "cost", "realised", "trades", "valueUsdMillion",
 ]
 ADV_COLUMNS = ["percentile", "advUsd"]
+IR_COLUMNS = ["aumBn", "ir"]
+DEFAULT_IR_POINTS = pd.DataFrame({
+    "aumBn": list(range(10)),
+    "ir": [0.40, 0.33, 0.27, 0.20, 0.13, 0.07, 0.00, -0.06, -0.13, -0.20],
+})
 
 DEFAULT_PARAMETERS: dict[str, Any] = {
     "engine_name": "ADV-calibrated migration",
@@ -55,6 +60,7 @@ def default_strategy() -> dict[str, Any]:
         "parameters": deepcopy(DEFAULT_PARAMETERS),
         "buckets": BUCKETS[BUCKET_COLUMNS].to_dict("records"),
         "adv_points": ADV_POINTS[ADV_COLUMNS].to_dict("records"),
+        "ir_points": DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records"),
     }
 
 
@@ -66,7 +72,13 @@ def load_strategies(path: Path = STORE_PATH) -> dict[str, dict[str, Any]]:
             raise ValueError("Strategy file must contain a JSON object.")
         for name, strategy in payload.items():
             strategy["parameters"] = {**DEFAULT_PARAMETERS, **strategy.get("parameters", {})}
-            validate_strategy(name, strategy["parameters"], strategy.get("buckets", []), strategy.get("adv_points", []))
+            strategy["ir_points"] = strategy.get(
+                "ir_points", DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records"),
+            )
+            validate_strategy(
+                name, strategy["parameters"], strategy.get("buckets", []),
+                strategy.get("adv_points", []), strategy["ir_points"],
+            )
             strategies[name] = strategy
     return strategies
 
@@ -78,7 +90,13 @@ def _finite(frame: pd.DataFrame, columns: list[str]) -> bool:
         return False
 
 
-def validate_strategy(name: str, parameters: dict, buckets: list[dict], adv_points: list[dict]) -> None:
+def validate_strategy(
+    name: str,
+    parameters: dict,
+    buckets: list[dict],
+    adv_points: list[dict],
+    ir_points: list[dict] | None = None,
+) -> None:
     if not name.strip():
         raise ValueError("Strategy name is required.")
     missing_parameters = [key for key in DEFAULT_PARAMETERS if key not in parameters]
@@ -111,6 +129,18 @@ def validate_strategy(name: str, parameters: dict, buckets: list[dict], adv_poin
         raise ValueError("ADV must be positive and percentiles must lie between 0 and 100.")
     if (adv_frame["percentile"].diff().dropna() <= 0).any() or (adv_frame["advUsd"].diff().dropna() <= 0).any():
         raise ValueError("ADV percentile points and values must increase strictly.")
+
+    ir_frame = pd.DataFrame(
+        DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records") if ir_points is None else ir_points,
+    )
+    if len(ir_frame) < 3 or any(column not in ir_frame for column in IR_COLUMNS):
+        raise ValueError("The backtest IR curve requires at least three AUM and IR observations.")
+    if not _finite(ir_frame, IR_COLUMNS):
+        raise ValueError("Backtest AUM and IR values must be numeric and finite.")
+    if (ir_frame["aumBn"] < 0).any():
+        raise ValueError("Backtest AUM values cannot be negative.")
+    if ir_frame["aumBn"].duplicated().any():
+        raise ValueError("Backtest AUM values must be unique.")
     try:
         calibrate_orders(0.0, bucket_frame, adv_frame, int(parameters["universe_size"]))
     except ValueError as error:
@@ -123,19 +153,27 @@ def save_strategy(
     buckets: pd.DataFrame,
     adv_points: pd.DataFrame,
     path: Path = STORE_PATH,
+    ir_points: pd.DataFrame | None = None,
 ) -> None:
     clean_name = name.strip()
     bucket_records = buckets[BUCKET_COLUMNS].to_dict("records")
     adv_records = adv_points[ADV_COLUMNS].to_dict("records")
-    validate_strategy(clean_name, parameters, bucket_records, adv_records)
     existing: dict[str, Any] = {}
     if path.exists():
         existing = json.loads(path.read_text())
+    if ir_points is None:
+        ir_records = existing.get(clean_name, {}).get(
+            "ir_points", DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records"),
+        )
+    else:
+        ir_records = ir_points[IR_COLUMNS].to_dict("records")
+    validate_strategy(clean_name, parameters, bucket_records, adv_records, ir_records)
     existing[clean_name] = {
         "name": clean_name,
         "parameters": parameters,
         "buckets": bucket_records,
         "adv_points": adv_records,
+        "ir_points": ir_records,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")

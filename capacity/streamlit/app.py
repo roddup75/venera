@@ -15,7 +15,8 @@ from capacity_model import (
     burr_shares, calibrate_orders, curve,
 )
 from strategy_store import (
-    ADV_COLUMNS, BUCKET_COLUMNS, DEFAULT_PARAMETERS, default_strategy, load_strategies, save_strategy,
+    ADV_COLUMNS, BUCKET_COLUMNS, DEFAULT_PARAMETERS, IR_COLUMNS,
+    default_strategy, load_strategies, save_strategy,
 )
 
 
@@ -99,6 +100,43 @@ def migration_chart(values: dict[str, np.ndarray], title: str):
     st.plotly_chart(style_figure(fig), width="stretch")
 
 
+def fit_ir_curve(points: pd.DataFrame) -> dict[str, float | np.ndarray]:
+    """Fit IR(A) = a - b A^gamma without requiring an optimisation dependency."""
+    frame = points[IR_COLUMNS].copy()
+    frame[IR_COLUMNS] = frame[IR_COLUMNS].apply(pd.to_numeric, errors="raise")
+    values = frame.to_numpy(float)
+    if len(frame) < 3 or not np.isfinite(values).all():
+        raise ValueError("Enter at least three finite AUM and IR observations.")
+    if (frame["aumBn"] < 0).any() or frame["aumBn"].duplicated().any():
+        raise ValueError("AUM values must be non-negative and unique.")
+    x = frame["aumBn"].to_numpy(float)
+    y = frame["ir"].to_numpy(float)
+    best: tuple[float, float, float, np.ndarray, float] | None = None
+    for gamma in np.linspace(0.20, 3.00, 1401):
+        transformed = x ** gamma
+        variance = float(np.dot(transformed - transformed.mean(), transformed - transformed.mean()))
+        if variance <= 1e-16:
+            continue
+        slope = float(np.dot(transformed - transformed.mean(), y - y.mean()) / variance)
+        b = -slope
+        if b < 0:
+            continue
+        a = float(y.mean() + b * transformed.mean())
+        fitted = a - b * transformed
+        sse = float(np.dot(y - fitted, y - fitted))
+        if best is None or sse < best[4]:
+            best = (a, b, float(gamma), fitted, sse)
+    if best is None:
+        raise ValueError("The IR observations do not support a decreasing fitted curve.")
+    a, b, gamma, fitted, sse = best
+    total = float(np.dot(y - y.mean(), y - y.mean()))
+    r_squared = 1.0 - sse / total if total > 1e-16 else 1.0
+    return {
+        "a": a, "b": b, "gamma": gamma, "fitted": fitted,
+        "r_squared": r_squared, "x": x, "y": y,
+    }
+
+
 try:
     strategies = load_strategies()
     strategy_load_error = None
@@ -130,6 +168,7 @@ selected_strategy = strategies[selected_strategy_name]
 saved = {**DEFAULT_PARAMETERS, **selected_strategy["parameters"]}
 strategy_buckets = pd.DataFrame(selected_strategy["buckets"])[BUCKET_COLUMNS].copy()
 strategy_adv_points = pd.DataFrame(selected_strategy["adv_points"])[ADV_COLUMNS].copy()
+strategy_ir_points = pd.DataFrame(selected_strategy["ir_points"])[IR_COLUMNS].copy()
 migration_labels = [*strategy_buckets["label"].astype(str).tolist(), ">100%"]
 main_key = f"main::{selected_strategy_name}::"
 
@@ -302,8 +341,8 @@ base, twice, four = [engine.metric(aum0 * x) for x in (1, 2, 4)]
 
 st.title("Capacity Analysis")
 st.caption("Distributional liquidity migration, execution horizons, market impact and alpha decay")
-overview, liquidity, demo, inputs, creator = st.tabs([
-    "Overview", "Liquidity migration", "Demo building blocks", "Input data", "Strategy creator",
+overview, backtest_ir, liquidity, demo, inputs, creator = st.tabs([
+    "Overview", "Backtest IR curve", "Liquidity migration", "Demo building blocks", "Input data", "Strategy creator",
 ])
 
 with overview:
@@ -410,6 +449,97 @@ with overview:
         st.info(f"Retained alpha falls through {retained_threshold:.0f}% near ${retained_cross.iloc[0]:.1f}bn.")
     else:
         st.info(f"Retained alpha stays above {retained_threshold:.0f}% through ${max_aum:.0f}bn.")
+
+with backtest_ir:
+    st.subheader("IR curve from optimised backtests")
+    st.write(
+        "Enter the information ratios produced by historical optimised backtests at different "
+        "AUM levels. The fitted curve is independent of the execution-based capacity model."
+    )
+    edited_ir_points = st.data_editor(
+        strategy_ir_points,
+        column_config={
+            "aumBn": st.column_config.NumberColumn("AUM (USD bn)", min_value=0.0, format="%.2f"),
+            "ir": st.column_config.NumberColumn("Backtest IR", format="%.4f"),
+        },
+        width="stretch",
+        hide_index=True,
+        num_rows="dynamic",
+        key=main_key + "backtest_ir_points",
+    )
+    save_ir = st.button(
+        "Save IR table to strategy",
+        key=main_key + "save_backtest_ir",
+        help="Persist this table with the selected strategy for future dashboard sessions.",
+    )
+    if save_ir:
+        try:
+            save_strategy(
+                selected_strategy_name, saved, strategy_buckets, strategy_adv_points,
+                ir_points=edited_ir_points,
+            )
+        except (KeyError, OSError, TypeError, ValueError) as error:
+            st.error(f"IR table was not saved: {error}")
+        else:
+            st.session_state["pending_strategy"] = selected_strategy_name
+            st.session_state["strategy_saved_message"] = f"Saved backtest IR table for {selected_strategy_name}."
+            st.rerun()
+
+    try:
+        ir_fit = fit_ir_curve(edited_ir_points)
+    except (KeyError, TypeError, ValueError) as error:
+        st.warning(f"The IR curve could not be fitted: {error}")
+    else:
+        fit_a = float(ir_fit["a"])
+        fit_b = float(ir_fit["b"])
+        fit_gamma = float(ir_fit["gamma"])
+        current_backtest_ir = fit_a - fit_b * float(aum0) ** fit_gamma
+        zero_aum = (fit_a / fit_b) ** (1 / fit_gamma) if fit_a > 0 and fit_b > 0 else np.nan
+        metrics = st.columns(4)
+        metrics[0].metric("Fitted IR at current AUM", f"{current_backtest_ir:.3f}")
+        metrics[1].metric("Zero-IR AUM", f"${zero_aum:.2f}bn" if np.isfinite(zero_aum) else "Not reached")
+        metrics[2].metric("Fit R²", f"{float(ir_fit['r_squared']):.4f}")
+        metrics[3].metric("Fitted γ", f"{fit_gamma:.3f}")
+
+        observed_x = np.asarray(ir_fit["x"], dtype=float)
+        observed_y = np.asarray(ir_fit["y"], dtype=float)
+        fit_horizon = max(float(max_aum), float(observed_x.max()), float(aum0))
+        fit_x = np.linspace(0.0, fit_horizon, 301)
+        fit_y = fit_a - fit_b * fit_x ** fit_gamma
+        fig = go.Figure()
+        fig.add_scatter(
+            x=fit_x, y=fit_y, mode="lines", name="Fitted backtest IR",
+            line=dict(color=GREEN, width=3),
+            hovertemplate="AUM: $%{x:.2f}bn<br>Fitted IR: %{y:.3f}<extra></extra>",
+        )
+        fig.add_scatter(
+            x=observed_x, y=observed_y, mode="markers", name="Backtest observations",
+            marker=dict(color=AMBER, size=10),
+            hovertemplate="AUM: $%{x:.2f}bn<br>Observed IR: %{y:.3f}<extra></extra>",
+        )
+        fig.add_hline(y=0, line_color="#8b9390", line_width=1)
+        fig.add_hline(
+            y=minimum_ir, line_dash="dash", line_color=RUST,
+            annotation_text=f"Minimum IR {minimum_ir:.2f}", annotation_font_color=RUST,
+        )
+        fig.add_vline(
+            x=float(aum0), line_dash="dot", line_color=BLUE,
+            annotation_text=f"Current AUM ${aum0:g}bn", annotation_font_color=BLUE,
+        )
+        add_aum_markers(fig, aum_markers, fit_horizon)
+        fig.update_layout(
+            title="Backtest information ratio by AUM",
+            xaxis_title="AUM (USD bn)", yaxis_title="Information ratio",
+            legend=dict(orientation="h", y=1.12),
+        )
+        st.plotly_chart(style_figure(fig), width="stretch")
+        st.latex(
+            rf"IR(A)={fit_a:.4f}-{fit_b:.4f}A^{{{fit_gamma:.3f}}}"
+        )
+        st.caption(
+            "The curve fits the supplied backtest observations directly. It should be interpreted "
+            "as empirical strategy evidence and compared with, rather than substituted for, the execution model."
+        )
 
 with liquidity:
     aums = [aum0, aum0 * 2, aum0 * 4]
@@ -565,7 +695,7 @@ with creator:
     st.subheader("Strategy creator")
     st.write(
         "Create or update a complete strategy case in one place. A saved strategy contains the "
-        "Capacity Lab defaults, liquidity buckets, and the trading-universe ADV distribution."
+        "Capacity Lab defaults, liquidity buckets, trading-universe ADV distribution, and backtest IR observations."
     )
     creator_base_name = st.selectbox(
         "Start from strategy",
@@ -676,6 +806,19 @@ with creator:
             num_rows="dynamic",
             key=creator_key + "adv_points",
         )
+        st.markdown("#### Backtest IR observations")
+        st.caption("Enter AUM in USD billions and the corresponding information ratio from each optimised backtest.")
+        creator_ir_points = st.data_editor(
+            pd.DataFrame(creator_base["ir_points"])[IR_COLUMNS],
+            column_config={
+                "aumBn": st.column_config.NumberColumn("AUM (USD bn)", min_value=0.0, format="%.2f"),
+                "ir": st.column_config.NumberColumn("Backtest IR", format="%.4f"),
+            },
+            width="stretch",
+            hide_index=True,
+            num_rows="dynamic",
+            key=creator_key + "ir_points",
+        )
         save_clicked = st.form_submit_button("Save strategy", type="primary")
 
     if save_clicked:
@@ -716,7 +859,10 @@ with creator:
                 "impact_b": float(creator_impact_b),
                 "impact_gamma": float(creator_impact_gamma),
             }
-            save_strategy(strategy_name, creator_parameters, creator_buckets, creator_adv_points)
+            save_strategy(
+                strategy_name, creator_parameters, creator_buckets, creator_adv_points,
+                ir_points=creator_ir_points,
+            )
         except (KeyError, OSError, TypeError, ValueError) as error:
             st.error(f"Strategy was not saved: {error}")
         else:

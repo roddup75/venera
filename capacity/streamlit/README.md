@@ -25,10 +25,11 @@ Streamlit normally opens `http://localhost:8501`. Stop it with `Ctrl+C`.
 ## Included views
 
 - Overview capacity metrics, net IR and alpha decomposition
+- Editable optimised-backtest IR observations with a fitted AUM curve
 - Traded-dollar, parent-order count and execution-outcome migration
 - Count-calibrated Burr, impact and alpha-decay demos
 - Live execution buckets and universe ADV quantiles
-- Strategy creator for saving model defaults, execution buckets and ADV curves together
+- Strategy creator for saving model defaults, execution buckets, ADV curves and backtest IR observations together
 
 ## Saved strategies
 
@@ -36,6 +37,8 @@ Use **Strategy creator** to start from an existing case, edit its Capacity Lab d
 
 The Swiss case is built in. User-created cases are stored locally in `data/strategies.user.json`; this runtime file is excluded from Git so private calibration data is not committed accidentally. Back up that file separately if the saved strategies need to move to another computer.
 
-Each strategy also stores its trading-universe size. The Swiss default is 203 stocks. Holdings cannot exceed the eligible universe, and the ADV calibration converts the percentile curve into a finite stock-count grid (using every stock up to 1,000 names and a 1,000-point approximation for larger universes).
+Each strategy also stores its trading-universe size and backtest IR table. The Swiss default is 203 stocks. Holdings cannot exceed the eligible universe, and the ADV calibration converts the percentile curve into a finite stock-count grid (using every stock up to 1,000 names and a 1,000-point approximation for larger universes).
+
+The **Backtest IR curve** tab fits `IR(A) = a - b*A^gamma` to at least three non-negative, unique AUM observations. Use **Save IR table to strategy** to persist edits. The fitted curve is empirical evidence from the supplied optimised backtests; it does not replace the execution-based net-IR calculation on the Overview tab.
 
 The optional liquidity-deterioration elasticity `λ` stresses effective ADV as AUM grows: `λ = 0` preserves the linear baseline, while positive values make participation grow faster than AUM. The Overview tail-pressure chart reports traded notional above 10% and 25% ADV together with the notional-weighted 90th-percentile parent-order size.

@@ -19,10 +19,15 @@ class StrategyStoreTests(unittest.TestCase):
         buckets = pd.DataFrame(source["buckets"])
         adv_points = pd.DataFrame(source["adv_points"])
         adv_points["advUsd"] *= 2
+        ir_points = pd.DataFrame(source["ir_points"])
+        ir_points.loc[1, "ir"] = 0.31
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "strategies.json"
-            save_strategy("Global DM Strategy", parameters, buckets, adv_points, path)
+            save_strategy(
+                "Global DM Strategy", parameters, buckets, adv_points, path,
+                ir_points=ir_points,
+            )
             strategies = load_strategies(path)
 
         saved = strategies["Global DM Strategy"]
@@ -30,6 +35,8 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved["parameters"]["holdings"], 80)
         self.assertEqual(saved["parameters"]["universe_size"], 1200)
         self.assertEqual(saved["parameters"]["liquidity_deterioration"], 0.2)
+        self.assertEqual(len(saved["ir_points"]), 10)
+        self.assertEqual(saved["ir_points"][1]["ir"], 0.31)
         saved_buckets = pd.DataFrame(saved["buckets"])
         saved_adv = pd.DataFrame(saved["adv_points"])
         orders = calibrate_orders(0.0, saved_buckets, saved_adv, 1200)
@@ -59,6 +66,18 @@ class StrategyStoreTests(unittest.TestCase):
                 save_strategy(
                     "Too concentrated", parameters, pd.DataFrame(source["buckets"]),
                     pd.DataFrame(source["adv_points"]), Path(directory) / "strategies.json",
+                )
+
+    def test_duplicate_backtest_aum_is_rejected(self):
+        source = default_strategy()
+        ir_points = pd.DataFrame(source["ir_points"])
+        ir_points.loc[1, "aumBn"] = ir_points.loc[0, "aumBn"]
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "must be unique"):
+                save_strategy(
+                    "Duplicate IR", DEFAULT_PARAMETERS, pd.DataFrame(source["buckets"]),
+                    pd.DataFrame(source["adv_points"]), Path(directory) / "strategies.json",
+                    ir_points=ir_points,
                 )
 
 
