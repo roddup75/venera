@@ -169,8 +169,15 @@ saved = {**DEFAULT_PARAMETERS, **selected_strategy["parameters"]}
 strategy_buckets = pd.DataFrame(selected_strategy["buckets"])[BUCKET_COLUMNS].copy()
 strategy_adv_points = pd.DataFrame(selected_strategy["adv_points"])[ADV_COLUMNS].copy()
 strategy_ir_points = pd.DataFrame(selected_strategy["ir_points"])[IR_COLUMNS].copy()
+try:
+    strategy_ir_fit = fit_ir_curve(strategy_ir_points)
+    strategy_ir_fit_error = None
+except (KeyError, TypeError, ValueError) as error:
+    strategy_ir_fit = None
+    strategy_ir_fit_error = str(error)
 migration_labels = [*strategy_buckets["label"].astype(str).tolist(), ">100%"]
 main_key = f"main::{selected_strategy_name}::"
+demo_key = f"demo::{selected_strategy_name}::"
 
 with st.sidebar:
     engine_options = ["ADV-calibrated migration", "Burr migration"]
@@ -265,6 +272,27 @@ with st.sidebar:
         key=main_key + "impact_gamma", help="Curvature of impact versus participation; values above one make the curve convex.",
     )
     st.caption("The saved a, b, and γ values reproduce the live-cost calibration. Editing them changes both current and projected impact without recalibrating the result.")
+
+    st.subheader("Backtest IR model")
+    if strategy_ir_fit is None:
+        backtest_a = backtest_b = backtest_gamma = None
+        st.warning(f"The saved observations could not be fitted: {strategy_ir_fit_error}")
+    else:
+        st.caption(r"Empirical backtest curve: $IR(A)=a-bA^\gamma$.")
+        backtest_a = st.number_input(
+            "Backtest a", value=float(strategy_ir_fit["a"]), step=.01,
+            format="%.4f", key=main_key + "backtest_a",
+        )
+        backtest_b = st.number_input(
+            "Backtest b", min_value=0.0, value=float(strategy_ir_fit["b"]), step=.005,
+            format="%.5f", key=main_key + "backtest_b",
+        )
+        backtest_gamma = st.number_input(
+            "Backtest γ", min_value=.20, max_value=3.0,
+            value=float(strategy_ir_fit["gamma"]), step=.05,
+            format="%.3f", key=main_key + "backtest_gamma",
+        )
+        st.caption("Defaults are fitted from the selected strategy's saved backtest observations.")
     st.subheader("Decision thresholds")
     minimum_ir = st.number_input("Minimum net IR", 0.0, 10.0, float(saved["minimum_ir"]), .05, key=main_key + "minimum_ir")
     retained_threshold = st.number_input("Minimum retained alpha (%)", 0.0, 100.0, float(saved["retained_threshold"]), 1.0, key=main_key + "retained_threshold")
@@ -341,8 +369,8 @@ base, twice, four = [engine.metric(aum0 * x) for x in (1, 2, 4)]
 
 st.title("Capacity Analysis")
 st.caption("Distributional liquidity migration, execution horizons, market impact and alpha decay")
-overview, backtest_ir, liquidity, demo, inputs, creator = st.tabs([
-    "Overview", "Backtest IR curve", "Liquidity migration", "Demo building blocks", "Input data", "Strategy creator",
+overview, backtest_ir, liquidity, demo, creator = st.tabs([
+    "Overview", "Backtest IR curve", "Liquidity migration", "Demo building blocks", "Strategy creator",
 ])
 
 with overview:
@@ -453,27 +481,30 @@ with overview:
 with backtest_ir:
     st.subheader("IR curve from optimised backtests")
     st.write(
-        "The curve uses the historical optimised-backtest observations saved under Input data. "
-        "It is independent of the execution-based capacity model."
+        "The curve uses the historical optimised-backtest observations saved in Strategy creator. "
+        "Its a, b, and γ parameters can be adjusted in the Capacity Lab sidebar."
     )
-    try:
-        ir_fit = fit_ir_curve(strategy_ir_points)
-    except (KeyError, TypeError, ValueError) as error:
-        st.warning(f"The IR curve could not be fitted: {error}")
+    if strategy_ir_fit is None or backtest_a is None or backtest_b is None or backtest_gamma is None:
+        st.warning(f"The IR curve could not be fitted: {strategy_ir_fit_error}")
     else:
-        fit_a = float(ir_fit["a"])
-        fit_b = float(ir_fit["b"])
-        fit_gamma = float(ir_fit["gamma"])
+        ir_fit = strategy_ir_fit
+        fit_a = float(backtest_a)
+        fit_b = float(backtest_b)
+        fit_gamma = float(backtest_gamma)
         current_backtest_ir = fit_a - fit_b * float(aum0) ** fit_gamma
         zero_aum = (fit_a / fit_b) ** (1 / fit_gamma) if fit_a > 0 and fit_b > 0 else np.nan
+        observed_x = np.asarray(ir_fit["x"], dtype=float)
+        observed_y = np.asarray(ir_fit["y"], dtype=float)
+        fitted_observations = fit_a - fit_b * observed_x ** fit_gamma
+        residual_sse = float(np.sum((observed_y - fitted_observations) ** 2))
+        total_sse = float(np.sum((observed_y - observed_y.mean()) ** 2))
+        parameter_r_squared = 1.0 - residual_sse / total_sse if total_sse > 1e-16 else 1.0
         metrics = st.columns(4)
         metrics[0].metric("Fitted IR at current AUM", f"{current_backtest_ir:.3f}")
         metrics[1].metric("Zero-IR AUM", f"${zero_aum:.2f}bn" if np.isfinite(zero_aum) else "Not reached")
-        metrics[2].metric("Fit R²", f"{float(ir_fit['r_squared']):.4f}")
-        metrics[3].metric("Fitted γ", f"{fit_gamma:.3f}")
+        metrics[2].metric("Model R²", f"{parameter_r_squared:.4f}")
+        metrics[3].metric("Model γ", f"{fit_gamma:.3f}")
 
-        observed_x = np.asarray(ir_fit["x"], dtype=float)
-        observed_y = np.asarray(ir_fit["y"], dtype=float)
         fit_horizon = max(float(max_aum), float(observed_x.max()), float(aum0))
         fit_x = np.linspace(float(observed_x.min()), fit_horizon, 301)
         fit_y = fit_a - fit_b * fit_x ** fit_gamma
@@ -508,8 +539,8 @@ with backtest_ir:
             rf"IR(A)={fit_a:.4f}-{fit_b:.4f}A^{{{fit_gamma:.3f}}}"
         )
         st.caption(
-            "The curve fits the supplied backtest observations directly. It should be interpreted "
-            "as empirical strategy evidence and compared with, rather than substituted for, the execution model."
+            "The saved observations determine the default fit; sidebar edits create an active scenario without "
+            "changing the strategy. Treat the curve as empirical strategy evidence alongside the execution model."
         )
 
 with liquidity:
@@ -535,35 +566,42 @@ with liquidity:
     st.caption("Participation buckets use total parent-order value divided by ADV. Live current-AUM orders are treated as observed one-day executions; the daily participation input supplies the minimum capacity used as orders scale. Integer execution buckets step at day thresholds, while the economic capacity curves use continuous duration.")
 
 with demo:
-    migration_demo, impact_demo, alpha_demo = st.tabs(["1. Liquidity migration", "2. Impact model", "3. Alpha decay"])
+    migration_demo, impact_demo, alpha_demo, backtest_demo = st.tabs([
+        "1. Liquidity migration", "2. Impact model", "3. Alpha decay", "4. Backtest IR model",
+    ])
     with migration_demo:
         aum_calibrated_demo, burr_count_demo = st.tabs(["AUM-calibrated migration", "Count-calibrated Burr"])
         with aum_calibrated_demo:
             st.subheader("AUM-calibrated liquidity migration")
             st.write(
                 "Compare two portfolio sizes using the observed parent-order buckets and the one-year "
-                "ADV distribution. These controls are independent of the main capacity case."
+                "ADV distribution. Controls start from the selected strategy's saved defaults."
             )
             c1, c2 = st.columns(2)
-            demo_aum_1 = c1.number_input("AUM 1 ($bn)", .01, 1000.0, float(aum0), .1, key="demo_aum_1")
-            demo_aum_2 = c2.number_input("AUM 2 ($bn)", .01, 1000.0, float(aum0 * 2), .1, key="demo_aum_2")
+            demo_aum_1 = c1.number_input("AUM 1 ($bn)", .01, 1000.0, float(saved["aum0"]), .1, key=demo_key + "aum_1")
+            demo_aum_2 = c2.number_input("AUM 2 ($bn)", .01, 1000.0, float(saved["aum0"] * 2), .1, key=demo_key + "aum_2")
             c1, c2, c3, c4 = st.columns(4)
-            if "demo_aum_holdings" in st.session_state and int(st.session_state["demo_aum_holdings"]) > int(universe_size):
-                st.session_state["demo_aum_holdings"] = int(universe_size)
-            demo_holdings_initial = {} if "demo_aum_holdings" in st.session_state else {"value": int(holdings)}
+            demo_holdings_key = demo_key + "aum_holdings"
+            if demo_holdings_key in st.session_state and int(st.session_state[demo_holdings_key]) > int(saved["universe_size"]):
+                st.session_state[demo_holdings_key] = int(saved["universe_size"])
+            demo_holdings_initial = {} if demo_holdings_key in st.session_state else {"value": int(saved["holdings"])}
             demo_holdings = c1.number_input(
-                "Average holdings", min_value=1, max_value=int(universe_size), step=1,
-                key="demo_aum_holdings", **demo_holdings_initial,
+                "Average holdings", min_value=1, max_value=int(saved["universe_size"]), step=1,
+                key=demo_holdings_key, **demo_holdings_initial,
             )
-            demo_adv_volume = c2.number_input("Market ADV level (%)", 1.0, 300.0, 100.0, 5.0, key="demo_aum_adv")
+            demo_adv_volume = c2.number_input(
+                "Market ADV level (%)", 1.0, 300.0, float(saved["adv_volume"]), 5.0,
+                key=demo_key + "aum_adv",
+            )
             demo_preference_label = c3.selectbox(
                 "Liquidity preference",
                 ["Neutral prior", "Favour liquid stocks", "Favour illiquid stocks"],
-                key="demo_aum_preference",
+                index=preference_options.index(saved["preference_label"]),
+                key=demo_key + "aum_preference",
             )
             demo_liquidity_deterioration = c4.number_input(
                 "Liquidity deterioration (λ)", 0.0, 1.0,
-                float(liquidity_deterioration), .05, key="demo_aum_liquidity_deterioration",
+                float(saved["liquidity_deterioration"]), .05, key=demo_key + "aum_liquidity_deterioration",
             )
             demo_preference = {
                 "Neutral prior": 0.0,
@@ -573,13 +611,13 @@ with demo:
             demo_scenario = replace(
                 scenario,
                 holdings=int(demo_holdings),
-                universe_size=int(universe_size),
+                universe_size=int(saved["universe_size"]),
                 adv_volume=float(demo_adv_volume),
                 liquidity_deterioration=float(demo_liquidity_deterioration),
             )
             demo_engine = AdvEngine(
                 demo_scenario,
-                orders(demo_preference, strategy_buckets, strategy_adv_points, int(universe_size)),
+                orders(demo_preference, strategy_buckets, strategy_adv_points, int(saved["universe_size"])),
                 strategy_buckets,
                 anchor_aum=float(saved["aum0"]),
                 anchor_holdings=int(saved["holdings"]),
@@ -611,17 +649,26 @@ with demo:
         with burr_count_demo:
             st.subheader("Count-calibrated Burr migration")
             c1, c2 = st.columns(2)
-            demo_eta = c1.slider("η · Scale elasticity", 0.0, 2.0, float(LIVE["countCalibration"]["scaleElasticity"]), .05)
-            demo_kappa = c2.slider("κ · Tail thickening", 0.0, 2.0, float(LIVE["countCalibration"]["tailElasticity"]), .05)
+            demo_eta = c1.slider(
+                "η · Scale elasticity", 0.0, 2.0, float(saved["eta"]), .05,
+                key=demo_key + "burr_eta",
+            )
+            demo_kappa = c2.slider(
+                "κ · Tail thickening", 0.0, 2.0, float(saved["kappa"]), .05,
+                key=demo_key + "burr_kappa",
+            )
             migration_chart({label: burr_shares(aum, scenario, count_fit=True, eta=demo_eta, kappa=demo_kappa, buckets=strategy_buckets) for label, aum in zip(labels, aums)}, "Parent-order count migration")
             fit = LIVE["countCalibration"]
             st.caption(f"Count fit: c={fit['burrC']:.3f}, d={fit['burrD']:.3f}, λ₀={fit['burrScale']:.4f}; joint RMSE={fit['rmsePercentagePoints']:.2f} percentage points.")
     with impact_demo:
         st.subheader("Impact model")
         c1, c2, c3 = st.columns(3)
-        a = c1.number_input("a", value=float(scenario.impact_a), format="%.4f")
-        b = c2.number_input("b", value=float(scenario.impact_b), format="%.4f")
-        gamma = c3.number_input("γ", value=float(scenario.impact_gamma), min_value=.01, max_value=3.0, step=.05)
+        a = c1.number_input("a", value=float(saved["impact_a"]), format="%.4f", key=demo_key + "impact_a")
+        b = c2.number_input("b", value=float(saved["impact_b"]), format="%.4f", key=demo_key + "impact_b")
+        gamma = c3.number_input(
+            "γ", value=float(saved["impact_gamma"]), min_value=.01, max_value=3.0,
+            step=.05, key=demo_key + "impact_gamma",
+        )
         p = np.linspace(0, 1, 201)
         fig = go.Figure()
         fig.add_scatter(x=p * 100, y=a + b * p ** gamma, mode="lines", name="Fitted impact", line_color=GREEN)
@@ -638,66 +685,59 @@ with demo:
             "captured gross alpha. The model then subtracts impact costs and divides net alpha "
             "by tracking error to obtain net IR. Capture is normalized to the current-AUM case."
         )
-        h = st.slider("Half-life (days)", 1, 126, int(round(half_life)))
+        h = st.slider(
+            "Half-life (days)", 1, 126, int(round(saved["half_life"])),
+            key=demo_key + "alpha_half_life",
+        )
         days = np.arange(127)
-        alpha = pd.DataFrame({"Day": days, "Remaining gross alpha (%)": gross_alpha * 2 ** (-days / h)})
+        alpha = pd.DataFrame({
+            "Day": days,
+            "Remaining gross alpha (%)": float(saved["gross_alpha"]) * 2 ** (-days / h),
+        })
         fig = px.line(alpha, x="Day", y="Remaining gross alpha (%)", color_discrete_sequence=[GREEN])
         st.plotly_chart(style_figure(fig), width="stretch")
         st.latex(r"R_g(t)=R_g(0)\,2^{-t/H_{\alpha}}")
-
-with inputs:
-    liquidity_inputs, backtest_inputs = st.tabs(["Liquidity and ADV", "Backtest IR observations"])
-    with liquidity_inputs:
-        st.subheader("Liquidity calibration inputs")
-        st.caption(f"Active strategy: {selected_strategy_name}")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Trading-universe size", f"{int(universe_size):,} stocks")
-        c2.metric("Average holdings", f"{int(holdings):,}")
-        c3.metric("Universe coverage", f"{100 * int(holdings) / int(universe_size):.1f}%")
-        display = strategy_buckets.rename(columns={"label": "Participation bucket", "trades": "Parent orders", "valueUsdMillion": "Value (USD m)", "share": "Notional share (%)", "cost": "Expected impact (bp)", "realised": "Realised impact (bp)"})
-        st.dataframe(display[["Participation bucket", "Parent orders", "Value (USD m)", "Notional share (%)", "Expected impact (bp)", "Realised impact (bp)"]], width="stretch", hide_index=True)
-        st.subheader("Trading-universe ADV distribution")
-        st.caption(
-            f"The percentile curve represents {int(universe_size):,} eligible stocks; the calibration "
-            "uses a finite stock-count grid (up to 1,000 points)."
-        )
-        adv_display = strategy_adv_points.rename(columns={"percentile": "Percentile", "advUsd": "ADV (USD)"})
-        st.dataframe(adv_display, width="stretch", hide_index=True)
-
-    with backtest_inputs:
-        st.subheader("Optimised-backtest IR observations")
-        st.write(
-            "Enter AUM in USD billions and the information ratio from each historical optimised backtest. "
-            "Save the table to refresh the fitted curve and retain it with the selected strategy."
-        )
-        edited_ir_points = st.data_editor(
-            strategy_ir_points,
-            column_config={
-                "aumBn": st.column_config.NumberColumn("AUM (USD bn)", min_value=0.0, format="%.2f"),
-                "ir": st.column_config.NumberColumn("Backtest IR", format="%.4f"),
-            },
-            width="stretch",
-            hide_index=True,
-            num_rows="dynamic",
-            key=main_key + "backtest_ir_points",
-        )
-        save_ir = st.button(
-            "Save IR table to strategy",
-            key=main_key + "save_backtest_ir",
-            help="Persist this table with the selected strategy and refresh the fitted curve.",
-        )
-        if save_ir:
-            try:
-                save_strategy(
-                    selected_strategy_name, saved, strategy_buckets, strategy_adv_points,
-                    ir_points=edited_ir_points,
-                )
-            except (KeyError, OSError, TypeError, ValueError) as error:
-                st.error(f"IR table was not saved: {error}")
-            else:
-                st.session_state["pending_strategy"] = selected_strategy_name
-                st.session_state["strategy_saved_message"] = f"Saved backtest IR table for {selected_strategy_name}."
-                st.rerun()
+    with backtest_demo:
+        st.subheader("Backtest IR model")
+        if strategy_ir_fit is None:
+            st.warning(f"The saved observations could not be fitted: {strategy_ir_fit_error}")
+        else:
+            st.write(
+                "Move the empirical curve parameters independently. The starting values are fitted "
+                "from the selected strategy's saved backtest observations."
+            )
+            c1, c2, c3 = st.columns(3)
+            demo_bt_a = c1.number_input(
+                "Backtest a", value=float(strategy_ir_fit["a"]), step=.01,
+                format="%.4f", key=demo_key + "backtest_a",
+            )
+            demo_bt_b = c2.number_input(
+                "Backtest b", min_value=0.0, value=float(strategy_ir_fit["b"]), step=.005,
+                format="%.5f", key=demo_key + "backtest_b",
+            )
+            demo_bt_gamma = c3.number_input(
+                "Backtest γ", min_value=.20, max_value=3.0,
+                value=float(strategy_ir_fit["gamma"]), step=.05,
+                format="%.3f", key=demo_key + "backtest_gamma",
+            )
+            demo_bt_x_observed = np.asarray(strategy_ir_fit["x"], dtype=float)
+            demo_bt_y_observed = np.asarray(strategy_ir_fit["y"], dtype=float)
+            demo_bt_horizon = max(float(saved["max_aum"]), float(demo_bt_x_observed.max()))
+            demo_bt_x = np.linspace(float(demo_bt_x_observed.min()), demo_bt_horizon, 301)
+            demo_bt_y = demo_bt_a - demo_bt_b * demo_bt_x ** demo_bt_gamma
+            fig = go.Figure()
+            fig.add_scatter(
+                x=demo_bt_x, y=demo_bt_y, mode="lines", name="Parameter curve",
+                line=dict(color=GREEN, width=3),
+            )
+            fig.add_scatter(
+                x=demo_bt_x_observed, y=demo_bt_y_observed, mode="markers",
+                name="Saved backtests", marker=dict(color=AMBER, size=10),
+            )
+            fig.add_hline(y=0, line_color="#8b9390", line_width=1)
+            fig.update_layout(xaxis_title="AUM (USD bn)", yaxis_title="Information ratio")
+            st.plotly_chart(style_figure(fig), width="stretch")
+            st.latex(rf"IR(A)={demo_bt_a:.4f}-{demo_bt_b:.5f}A^{{{demo_bt_gamma:.3f}}}")
 
 with creator:
     st.subheader("Strategy creator")

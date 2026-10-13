@@ -497,17 +497,18 @@ annual order count remains unchanged. With the same AUM and twice the holdings, 
 and frequency doubles. With twice the turnover alone, frequency doubles but participation
 shares are unchanged. These identities are model assumptions, not estimated portfolio responses.
 
-The main dashboard retains Burr as the default comparison. Selecting ADV-calibrated migration
-updates the overview and alpha-decay engine. The liquidity demo provides independent ADV and
-Burr controls; resetting a demo copies current dashboard assumptions without modifying the main
-case. The ADV demo shows count and dollar migration, historical reconciliation, execution
+The main dashboard provides Burr as a comparison to the strategy's saved migration default.
+The liquidity demo provides independent ADV and Burr controls initialized from the selected
+strategy. The ADV demo shows count and dollar migration, historical reconciliation, execution
 feasibility and relative alpha capture. The impact demo illustrates $a+bp^\gamma$ independently.
 The alpha-decay demo adds a waiting-time factor $2^{-t/H_\alpha}$ to implemented gross alpha
 and displays 126 trading days, approximately six months; this is an explanatory extension,
 not an additional waiting penalty in the capacity engine.
-The Input data area provides a Backtest IR observations subtab for editing and persisting
-strategy-specific AUM--IR observations. The Backtest IR curve tab displays the fit from
-equation~\eqref{eq:backtestir} and keeps that empirical evidence separate from modeled net IR.
+The Strategy creator edits and persists strategy-specific AUM--IR observations together with all
+other inputs. The Backtest IR curve tab initializes $a$, $b$ and $\gamma$ from
+equation~\eqref{eq:backtestir}; the Capacity Lab sidebar can adjust them for the active analysis.
+An independent backtest demo exposes the same three parameters and starts from the selected
+strategy's fit. The empirical curve remains separate from modeled net IR.
 
 Validation covers historical counts and values, percentile interpolation, annual trading
 conservation, volume-stress equivalence and infeasible calibration inputs. Quadrature density,
@@ -551,11 +552,13 @@ streamlit run app.py
 On Windows PowerShell, the environment is activated with
 \verb|.venv\Scripts\Activate.ps1|. Streamlit normally opens
 \url{http://localhost:8501}; the server is stopped with \texttt{Ctrl+C}. The Streamlit version
-contains the Overview, Liquidity migration, Demo building blocks, Input data and Strategy creator
-areas. The built-in Swiss Strategy has 203 eligible stocks. The Strategy creator saves a named
-case containing dashboard defaults, liquidity buckets, universe size and ADV percentiles in the
+contains the Overview, Backtest IR curve, Liquidity migration, Demo building blocks and Strategy
+creator areas. The built-in Swiss Strategy has 203 eligible stocks. The Strategy creator saves a
+named case containing dashboard defaults, liquidity buckets, universe size, ADV percentiles and
+backtest IR observations in the
 local \verb|data/strategies.user.json| file; saving an existing name replaces its local record.
-The sidebar selector loads the selected case throughout the Capacity Lab. The saved universe size
+The sidebar selector loads the selected case throughout the dashboard and supplies every control's
+default. The saved universe size
 constrains holdings and sets the finite grid in equation~\eqref{eq:universegrid}. The application reads
 the live bucket and ADV JSON files used by the TypeScript dashboard and recalculates scenarios
 when AUM, turnover, holdings, participation, horizon, half-life or model controls change.
