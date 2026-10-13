@@ -475,7 +475,7 @@ with backtest_ir:
         observed_x = np.asarray(ir_fit["x"], dtype=float)
         observed_y = np.asarray(ir_fit["y"], dtype=float)
         fit_horizon = max(float(max_aum), float(observed_x.max()), float(aum0))
-        fit_x = np.linspace(0.0, fit_horizon, 301)
+        fit_x = np.linspace(float(observed_x.min()), fit_horizon, 301)
         fit_y = fit_a - fit_b * fit_x ** fit_gamma
         fig = go.Figure()
         fig.add_scatter(

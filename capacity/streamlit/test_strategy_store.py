@@ -36,6 +36,8 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved["parameters"]["universe_size"], 1200)
         self.assertEqual(saved["parameters"]["liquidity_deterioration"], 0.2)
         self.assertEqual(len(saved["ir_points"]), 10)
+        self.assertEqual(saved["ir_points"][0]["aumBn"], 1)
+        self.assertEqual(saved["ir_points"][-1]["aumBn"], 10)
         self.assertEqual(saved["ir_points"][1]["ir"], 0.31)
         saved_buckets = pd.DataFrame(saved["buckets"])
         saved_adv = pd.DataFrame(saved["adv_points"])
