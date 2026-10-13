@@ -39,6 +39,6 @@ The Swiss case is built in. User-created cases are stored locally in `data/strat
 
 Each strategy also stores its trading-universe size and backtest IR table. The Swiss default is 203 stocks. Holdings cannot exceed the eligible universe, and the ADV calibration converts the percentile curve into a finite stock-count grid (using every stock up to 1,000 names and a 1,000-point approximation for larger universes).
 
-The **Backtest IR curve** tab fits `IR(A) = a - b*A^gamma` to at least three non-negative, unique AUM observations. Use **Save IR table to strategy** to persist edits. The fitted curve is empirical evidence from the supplied optimised backtests; it does not replace the execution-based net-IR calculation on the Overview tab.
+Use **Input data → Backtest IR observations** to enter at least three non-negative, unique AUM observations and **Save IR table to strategy** to persist edits. The **Backtest IR curve** tab then fits `IR(A) = a - b*A^gamma`. The fitted curve is empirical evidence from the supplied optimised backtests; it does not replace the execution-based net-IR calculation on the Overview tab.
 
 The optional liquidity-deterioration elasticity `λ` stresses effective ADV as AUM grows: `λ = 0` preserves the linear baseline, while positive values make participation grow faster than AUM. The Overview tail-pressure chart reports traded notional above 10% and 25% ADV together with the notional-weighted 90th-percentile parent-order size.

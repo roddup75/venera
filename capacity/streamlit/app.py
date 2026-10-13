@@ -453,40 +453,11 @@ with overview:
 with backtest_ir:
     st.subheader("IR curve from optimised backtests")
     st.write(
-        "Enter the information ratios produced by historical optimised backtests at different "
-        "AUM levels. The fitted curve is independent of the execution-based capacity model."
+        "The curve uses the historical optimised-backtest observations saved under Input data. "
+        "It is independent of the execution-based capacity model."
     )
-    edited_ir_points = st.data_editor(
-        strategy_ir_points,
-        column_config={
-            "aumBn": st.column_config.NumberColumn("AUM (USD bn)", min_value=0.0, format="%.2f"),
-            "ir": st.column_config.NumberColumn("Backtest IR", format="%.4f"),
-        },
-        width="stretch",
-        hide_index=True,
-        num_rows="dynamic",
-        key=main_key + "backtest_ir_points",
-    )
-    save_ir = st.button(
-        "Save IR table to strategy",
-        key=main_key + "save_backtest_ir",
-        help="Persist this table with the selected strategy for future dashboard sessions.",
-    )
-    if save_ir:
-        try:
-            save_strategy(
-                selected_strategy_name, saved, strategy_buckets, strategy_adv_points,
-                ir_points=edited_ir_points,
-            )
-        except (KeyError, OSError, TypeError, ValueError) as error:
-            st.error(f"IR table was not saved: {error}")
-        else:
-            st.session_state["pending_strategy"] = selected_strategy_name
-            st.session_state["strategy_saved_message"] = f"Saved backtest IR table for {selected_strategy_name}."
-            st.rerun()
-
     try:
-        ir_fit = fit_ir_curve(edited_ir_points)
+        ir_fit = fit_ir_curve(strategy_ir_points)
     except (KeyError, TypeError, ValueError) as error:
         st.warning(f"The IR curve could not be fitted: {error}")
     else:
@@ -675,21 +646,58 @@ with demo:
         st.latex(r"R_g(t)=R_g(0)\,2^{-t/H_{\alpha}}")
 
 with inputs:
-    st.subheader("Liquidity calibration inputs")
-    st.caption(f"Active strategy: {selected_strategy_name}")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Trading-universe size", f"{int(universe_size):,} stocks")
-    c2.metric("Average holdings", f"{int(holdings):,}")
-    c3.metric("Universe coverage", f"{100 * int(holdings) / int(universe_size):.1f}%")
-    display = strategy_buckets.rename(columns={"label": "Participation bucket", "trades": "Parent orders", "valueUsdMillion": "Value (USD m)", "share": "Notional share (%)", "cost": "Expected impact (bp)", "realised": "Realised impact (bp)"})
-    st.dataframe(display[["Participation bucket", "Parent orders", "Value (USD m)", "Notional share (%)", "Expected impact (bp)", "Realised impact (bp)"]], width="stretch", hide_index=True)
-    st.subheader("Trading-universe ADV distribution")
-    st.caption(
-        f"The percentile curve represents {int(universe_size):,} eligible stocks; the calibration "
-        "uses a finite stock-count grid (up to 1,000 points)."
-    )
-    adv_display = strategy_adv_points.rename(columns={"percentile": "Percentile", "advUsd": "ADV (USD)"})
-    st.dataframe(adv_display, width="stretch", hide_index=True)
+    liquidity_inputs, backtest_inputs = st.tabs(["Liquidity and ADV", "Backtest IR observations"])
+    with liquidity_inputs:
+        st.subheader("Liquidity calibration inputs")
+        st.caption(f"Active strategy: {selected_strategy_name}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Trading-universe size", f"{int(universe_size):,} stocks")
+        c2.metric("Average holdings", f"{int(holdings):,}")
+        c3.metric("Universe coverage", f"{100 * int(holdings) / int(universe_size):.1f}%")
+        display = strategy_buckets.rename(columns={"label": "Participation bucket", "trades": "Parent orders", "valueUsdMillion": "Value (USD m)", "share": "Notional share (%)", "cost": "Expected impact (bp)", "realised": "Realised impact (bp)"})
+        st.dataframe(display[["Participation bucket", "Parent orders", "Value (USD m)", "Notional share (%)", "Expected impact (bp)", "Realised impact (bp)"]], width="stretch", hide_index=True)
+        st.subheader("Trading-universe ADV distribution")
+        st.caption(
+            f"The percentile curve represents {int(universe_size):,} eligible stocks; the calibration "
+            "uses a finite stock-count grid (up to 1,000 points)."
+        )
+        adv_display = strategy_adv_points.rename(columns={"percentile": "Percentile", "advUsd": "ADV (USD)"})
+        st.dataframe(adv_display, width="stretch", hide_index=True)
+
+    with backtest_inputs:
+        st.subheader("Optimised-backtest IR observations")
+        st.write(
+            "Enter AUM in USD billions and the information ratio from each historical optimised backtest. "
+            "Save the table to refresh the fitted curve and retain it with the selected strategy."
+        )
+        edited_ir_points = st.data_editor(
+            strategy_ir_points,
+            column_config={
+                "aumBn": st.column_config.NumberColumn("AUM (USD bn)", min_value=0.0, format="%.2f"),
+                "ir": st.column_config.NumberColumn("Backtest IR", format="%.4f"),
+            },
+            width="stretch",
+            hide_index=True,
+            num_rows="dynamic",
+            key=main_key + "backtest_ir_points",
+        )
+        save_ir = st.button(
+            "Save IR table to strategy",
+            key=main_key + "save_backtest_ir",
+            help="Persist this table with the selected strategy and refresh the fitted curve.",
+        )
+        if save_ir:
+            try:
+                save_strategy(
+                    selected_strategy_name, saved, strategy_buckets, strategy_adv_points,
+                    ir_points=edited_ir_points,
+                )
+            except (KeyError, OSError, TypeError, ValueError) as error:
+                st.error(f"IR table was not saved: {error}")
+            else:
+                st.session_state["pending_strategy"] = selected_strategy_name
+                st.session_state["strategy_saved_message"] = f"Saved backtest IR table for {selected_strategy_name}."
+                st.rerun()
 
 with creator:
     st.subheader("Strategy creator")

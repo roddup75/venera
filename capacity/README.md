@@ -48,9 +48,9 @@ The saved trading-universe size constrains holdings and determines the finite st
 to interpolate the ADV percentile distribution (Swiss default: 203 stocks).
 An optional liquidity-deterioration elasticity stresses effective ADV as AUM grows, while the
 Overview tail chart reports threshold exceedances and the weighted 90th-percentile trade size.
-The **Backtest IR curve** tab accepts AUM and information-ratio observations from optimised
-historical backtests and fits the decreasing curve `IR(A) = a - b*A^gamma`. The table can be saved
-with the selected strategy and remains separate from the execution-based net-IR model.
+The **Input data → Backtest IR observations** tab accepts AUM and information-ratio observations
+from optimised historical backtests and saves them with the selected strategy. The **Backtest IR
+curve** tab fits `IR(A) = a - b*A^gamma` and remains separate from the execution-based net-IR model.
 
 Run its model tests with:
 
