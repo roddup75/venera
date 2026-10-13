@@ -20,8 +20,8 @@ BUCKET_COLUMNS = [
 ADV_COLUMNS = ["percentile", "advUsd"]
 IR_COLUMNS = ["aumBn", "ir"]
 DEFAULT_IR_POINTS = pd.DataFrame({
-    "aumBn": list(range(1, 11)),
-    "ir": [0.40, 0.33, 0.27, 0.20, 0.13, 0.07, 0.00, -0.06, -0.13, -0.20],
+    "aumBn": list(range(10)),
+    "ir": [0.60, 0.53, 0.47, 0.40, 0.33, 0.27, 0.20, 0.14, 0.07, 0.00],
 })
 
 DEFAULT_PARAMETERS: dict[str, Any] = {
