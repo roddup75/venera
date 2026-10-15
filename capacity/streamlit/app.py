@@ -620,14 +620,7 @@ with overview:
 
 with summary:
     st.subheader("Capacity results")
-    if capacity_uncertainty is not None:
-        cells=st.columns(4)
-        cells[0].metric("Capacity P20",percentile_display(capacity_uncertainty['P20']))
-        cells[1].metric("Capacity median (P50)",percentile_display(capacity_uncertainty['P50']))
-        cells[2].metric("Capacity P80",percentile_display(capacity_uncertainty['P80']))
-        cells[3].metric("Threshold reached within horizon",f"{capacity_uncertainty['Threshold reached (%)']:.2f}%")
-        st.caption(f"Minimum net IR {minimum_ir:.2f}. The empirical P20–P80 range is the central 60% of stock-selection outcomes; alpha-decay and TC are fixed.")
-    else:
+    if capacity_uncertainty is None:
         c1,c2=st.columns(2)
         c1.metric("Empirical AUM at minimum IR",percentile_display(capacity_minimum_crossing))
         c2.metric("Backtest AUM at minimum IR",f"${minimum_ir_aum:.2f}bn" if np.isfinite(minimum_ir_aum) else "Not reached")
@@ -647,7 +640,7 @@ with summary:
         'Empirical net IR':[m['Net IR'] for m in scenario_metrics],
         'Backtest net IR':[active_backtest_a-active_backtest_b*a**active_backtest_gamma if np.isfinite(active_backtest_a) else np.nan for a in scenario_aums]})
     display_table(comparison_scenarios,hide_index=True,width="stretch")
-    # The distribution is deliberately last, after results and both tables.
+    # The simulation section follows both tables; its metrics sit below the histogram.
     if capacity_uncertainty is not None:
         st.subheader("Simulation distribution")
         reached=capacity_draws.loc[capacity_draws['Threshold reached']]
@@ -659,6 +652,12 @@ with summary:
                 value=capacity_uncertainty[key]
                 if value is not None:fig.add_vline(x=value,line_color=color,line_dash='dash',annotation_text=key)
             st.plotly_chart(style_figure(fig),width="stretch")
+        cells=st.columns(4)
+        cells[0].metric("Capacity P20",percentile_display(capacity_uncertainty['P20']))
+        cells[1].metric("Capacity median (P50)",percentile_display(capacity_uncertainty['P50']))
+        cells[2].metric("Capacity P80",percentile_display(capacity_uncertainty['P80']))
+        cells[3].metric("Threshold reached within horizon",f"{capacity_uncertainty['Threshold reached (%)']:.2f}%")
+        st.caption(f"Minimum net IR {minimum_ir:.2f}. The empirical P20–P80 range is the central 60% of stock-selection outcomes; alpha-decay and TC are fixed.")
         if capacity_uncertainty['Censored simulations']:
             st.caption(f"{capacity_uncertainty['Censored simulations']:,} simulations remain beyond ${max_aum:.2f}bn and are included in the percentile calculation. The histogram shows reached crossings only.")
         st.download_button('Export simulated capacity crossings CSV',capacity_draws.assign(seed=int(mc_seed),uncertainty_source=uncertainty_source).to_csv(index=False),'simulated_capacity_crossings.csv','text/csv')
