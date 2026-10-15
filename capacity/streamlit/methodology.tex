@@ -6,8 +6,10 @@
 \usepackage[margin=24mm]{geometry}
 \usepackage{amsmath,amssymb,microtype}
 \usepackage{booktabs,tabularx,array,xcolor,hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
 \definecolor{capacitygreen}{HTML}{176B57}
-\hypersetup{colorlinks=true,linkcolor=capacitygreen,urlcolor=capacitygreen,
+\hypersetup{colorlinks=true,linkcolor=capacitygreen,urlcolor=capacitygreen,citecolor=capacitygreen,
  pdftitle={Capacity Lab: Objectives, Approaches and Calibration},pdfauthor={Capacity Lab}}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{6pt}
@@ -140,26 +142,101 @@ The default is \textbf{Deterministic}: a central curve without intervals. Select
 \appendix
 \section{Simulation assumptions and calculation notes}
 \subsection{What Monte Carlo samples}
-A sample is an alternative trading book and congestion outcome, not a draw of an individual trade's alpha forecast. Default simulation settings are 2,000 samples and seed 2026; the observed parent-order count determines the size of each book.
+A sample is an alternative trading book and congestion outcome, not a draw of an individual trade's alpha forecast. The diagram follows one simulation through the model. The cost and congestion paths use independent random draws.
 
-\begin{itemize}
-\item \textbf{Bucket data: multinomial counts.} Bucket selection probabilities are observed trade-count shares. Each proxy order uses its bucket's representative order/ADV and average notional. The current sampler does not generate a continuous distribution within each bucket.
-\item \textbf{Actual trades: empirical bootstrap.} Observed orders are sampled uniformly with replacement, retaining complete order-notional and ADV pairs. Equal selection probability does not establish equal alpha contribution.
-\item \textbf{Congestion: binomial counts.} Independently of cost-book sampling, the number of multi-day trades follows a binomial distribution with the observed book size and the calibrated multi-day probability. Its sampled percentage is mapped into IR; simulated alpha retention is floored at zero.
-\end{itemize}
+\begin{center}
+\begin{tikzpicture}[
+ box/.style={draw=capacitygreen!65,rounded corners=3pt,fill=capacitygreen!5,
+ text width=6.0cm,align=center,inner sep=7pt,font=\small},
+ bluebox/.style={box,draw=blue!45!black,fill=blue!4},
+ wide/.style={box,text width=13.5cm},
+ flow/.style={-{Stealth[length=2mm]},thick,draw=capacitygreen!80!black}]
+\node[wide] (setup) {\textbf{Start with observed orders and fixed calibration}\\
+$N$ = observed parent-order count per book; current AUM anchors order sizes.\\
+Impact curve, congestion probability $p(A)$ and TC retention are fixed.};
+\node[box,below=8mm of setup.south west,anchor=north west] (book) {
+\textbf{1a. Draw a cost book: $N$ orders}\\
+\textbf{Buckets:} draw bucket counts using observed count shares (multinomial).\\
+\textbf{Or CSV:} resample complete order/ADV pairs with replacement (bootstrap).};
+\node[bluebox,below=8mm of setup.south east,anchor=north east] (congestion) {
+\textbf{1b. Draw multi-day trade counts}\\
+At each AUM $A$, draw\\
+$K(A)\sim\mathrm{Binomial}(N,p(A))$.\\
+Each order has the same calibrated probability of taking more than one day.};
+\node[box,below=7mm of book] (cost) {\textbf{2a. Calculate incremental cost}\\
+Reuse this book across AUM; scale order sizes with AUM and keep ADV fixed.\\
+Compare each cost with this book's own USD 0.5bn baseline; convert to IR units.};
+\node[bluebox,below=7mm of congestion] (alpha) {\textbf{2b. Calculate alpha-decay IR}\\
+Convert count to percentage: $100K(A)/N$.\\
+Apply the calibrated percentage-to-IR curve, flooring alpha retention at zero.\\
+TC-alpha retention stays fixed.};
+\coordinate (mid) at ($(cost.south)!0.5!(alpha.south)$);
+\node[wide,below=9mm of mid] (combine) {\textbf{3. Combine the three pillars for this simulation}\\
+Sampled alpha-decay IR $\times$ fixed TC-alpha retention $-$ sampled incremental cost in IR units.};
+\node[wide,below=7mm of combine] (repeat) {\textbf{4. Repeat $M$ times and read the range at each AUM}\\
+Default: $M=2{,}000$ simulations, seed 2026. Take the 5th and 95th percentiles.\\
+More simulations improve numerical stability; each book still contains $N$ orders.};
+\draw[flow] (setup.south) -- ++(0,-3mm) -| (book.north);
+\draw[flow] (setup.south) -- ++(0,-3mm) -| (congestion.north);
+\draw[flow] (book) -- (cost);
+\draw[flow] (congestion) -- (alpha);
+\draw[flow] (cost.south) -- ++(0,-4mm) -| (combine.north);
+\draw[flow] (alpha.south) -- ++(0,-4mm) -| (combine.north);
+\draw[flow] (combine) -- (repeat);
+\end{tikzpicture}
+\end{center}
+{\small\textbf{Figure 1. Sampling workflow.} Only the cost book is reused across AUM. The separate congestion counts do not track the same individual trades across the curve. The displayed central curve uses calibrated congestion and mean bootstrap impact; it is not the mean of the simulated final IR outcomes.}
 
-The same cost book is reused at every AUM and compared with its own USD 0.5bn baseline. TC retention and calibration parameters remain fixed. More samples improve numerical stability without increasing the orders in each book or resolving uncertainty in the assumptions. The seed makes the simulations reproducible.
+\textbf{What is inside a bucket?} Each proxy order uses the bucket's representative order/ADV and average notional. No continuous within-bucket distribution is drawn. Multinomial and binomial sampling are standard count models~\cite{agresti}; resampling observed CSV rows is the empirical bootstrap~\cite{efron}. The seed makes draws reproducible.
 
+\newpage
 \subsection{Interpretation and limitations}
 For alpha-decay purposes, orders are exchangeable: the model has no trade-specific alpha forecasts or delay sensitivities. This is a count-based approximation, not an explicit allocation of equal alpha dollars to every trade. Cost aggregation remains notional-weighted.
 
 Congestion-count draws and cost composition are independent in the simulation. In reality, difficult-to-execute trades may carry more or less alpha. The ranges exclude this dependence, calibration uncertainty, clustered orders and changes in market liquidity. They are conditional pointwise ranges, not simultaneous confidence bands or guarantees of future performance. The centre curve uses the calibrated congestion share and mean bootstrap impact, not the mean of the nonlinear final outcomes. Ranges collapse at the USD 0.5bn anchor.
 
-The Fundamental Law of Active Management motivates separating forecast skill, independent breadth and implementation efficiency. This dashboard does not estimate skill or independent breadth, and its TC scenario is not an estimated forecast-to-position correlation.
+The Fundamental Law of Active Management motivates separating forecast skill, independent breadth and implementation efficiency. This dashboard does not estimate skill or independent breadth, and its TC scenario is not an estimated forecast-to-position correlation~\cite{grinold,clarke}.
 
 \subsection{Units and fitted relationships}
 AUM is in USD billions. Order/ADV is a fraction internally and a percentage in the interface. Annual alpha and tracking error use percentage points. If $C(A)$ is annual portfolio cost in bp and $TE$ is tracking error in percent, incremental cost in IR units is
 \[
 \Delta C_{IR}(A)=\frac{C(A)-C(0.5)}{100\,TE}.
 \]
+\subsection{Academic foundations and model choices}
+The references support the sampling methods and the economic motivation for the pillars. Efron describes the bootstrap~\cite{efron}; Agresti covers binomial and multinomial count models~\cite{agresti}. Almgren and co-authors study nonlinear market impact~\cite{almgren}. G\^arleanu and Pedersen analyse trading with decaying return predictors and transaction costs~\cite{garleanu}. Grinold and Clarke and co-authors provide the active-management and implementation-efficiency context~\cite{grinold,clarke}.
+
+\textbf{What the literature does not establish here.} Our three calibration points, fitted congestion-to-IR curve, TC-alpha retention mapping, independence of the two random paths and multiplicative combination are choices for this dashboard. The cited works do not validate these choices or turn the simulated percentile ranges into full forecast confidence intervals.
+
+\newpage
+\begin{thebibliography}{9}
+\bibitem{agresti} Agresti, A. (2002).
+Introduction: Distributions and Inference for Categorical Data.
+In \emph{Categorical Data Analysis}, 2nd ed., Chapter 1. Wiley.
+\href{https://doi.org/10.1002/0471249688.ch1}{doi:10.1002/0471249688.ch1}.
+
+\bibitem{efron} Efron, B. (1979).
+Bootstrap Methods: Another Look at the Jackknife.
+\emph{The Annals of Statistics}, 7(1), 1--26.
+\href{https://doi.org/10.1214/aos/1176344552}{doi:10.1214/aos/1176344552}.
+
+\bibitem{almgren} Almgren, R., Thum, C., Hauptmann, E., and Li, H. (2005).
+\emph{Direct Estimation of Equity Market Impact}.
+Working paper, 10 May 2005.
+\href{https://www.cis.upenn.edu/~mkearns/finread/costestim.pdf}{Full paper (University of Pennsylvania)}.
+
+\bibitem{garleanu} G\^arleanu, N., and Pedersen, L. H. (2013).
+Dynamic Trading with Predictable Returns and Transaction Costs.
+\emph{The Journal of Finance}, 68(6), 2309--2340.
+\href{https://doi.org/10.1111/jofi.12080}{doi:10.1111/jofi.12080}.
+
+\bibitem{grinold} Grinold, R. C. (1989).
+The Fundamental Law of Active Management.
+\emph{The Journal of Portfolio Management}, 15(3), 30--37.
+\href{https://doi.org/10.3905/jpm.1989.409211}{doi:10.3905/jpm.1989.409211}.
+
+\bibitem{clarke} Clarke, R. G., de Silva, H., and Thorley, S. (2002).
+Portfolio Constraints and the Fundamental Law of Active Management.
+\emph{Financial Analysts Journal}, 58(5), 48--66.
+\href{https://doi.org/10.2469/faj.v58.n5.2468}{doi:10.2469/faj.v58.n5.2468}.
+\end{thebibliography}
 \end{document}

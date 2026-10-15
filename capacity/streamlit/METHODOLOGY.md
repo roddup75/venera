@@ -105,6 +105,21 @@ Capacity is the first AUM from USD 0.5bn where the central curve reaches the cho
 
 A sample is an alternative trading book and congestion outcome, not an individual trade-alpha forecast. Initial settings are 2,000 samples and seed 2026; the observed order count determines book size.
 
+The two random paths are independent. The workflow for one simulation is:
+
+```mermaid
+flowchart TD
+    S["Observed N orders and fixed calibration"] --> B["Cost book: multinomial bucket counts OR bootstrap CSV rows"]
+    S --> K["Congestion: binomial multi-day count at each AUM"]
+    B --> C["Reuse book across AUM; calculate cost above its own USD 0.5bn baseline"]
+    K --> I["Map sampled multi-day percentage to alpha-decay IR"]
+    C --> R["IR = sampled alpha-decay IR x fixed TC retention - incremental cost in IR units"]
+    I --> R
+    R --> M["Repeat M = 2,000 times; take pointwise 5th and 95th percentiles"]
+```
+
+**M versus N:** M is the number of simulations; N is the observed order count in each book. Increasing M improves numerical stability without increasing N. Only the cost book is reused across AUM; congestion counts do not follow individual trade identities across AUM. The central curve uses calibrated congestion and mean bootstrap impact, rather than the mean of simulated final IR. Binomial/multinomial sampling follows standard count models [1]; CSV resampling is the empirical bootstrap [2].
+
 - **Bucket data: multinomial counts.** Probabilities are observed count shares. Each proxy order uses a bucket representative order/ADV and average notional. There is no continuous within-bucket draw.
 - **Actual trades: empirical bootstrap.** Observed complete order-notional/ADV pairs are sampled uniformly with replacement. Equal selection probability does not establish equal alpha contribution.
 - **Congestion: binomial counts.** Independently of cost-book sampling, multi-day counts use observed book size and the calibrated multi-day probability. The sampled percentage maps into IR, with simulated alpha retention floored at zero.
@@ -124,3 +139,16 @@ The Fundamental Law of Active Management motivates separating skill, independent
 AUM uses USD billions; order/ADV is a fraction internally and a percentage in the interface. Alpha and tracking error use percentage points. For annual portfolio cost $C(A)$ in bp and tracking error $TE$ in percent:
 
 $$\Delta C_{IR}(A)=\frac{C(A)-C(0.5)}{100TE}.$$
+
+### Academic foundations and model choices
+
+The references support the sampling methods and economic motivation: count distributions [1], empirical bootstrap [2], nonlinear market impact [3], decaying return predictors and trading costs [4], and active-management/implementation efficiency [5,6]. Our calibration triples, congestion-to-IR and TC-alpha mappings, independence assumption and multiplicative combination remain dashboard modelling choices. These papers do not validate those choices or make the simulated ranges full forecast confidence intervals.
+
+### References
+
+1. Agresti, A. (2002). Introduction: Distributions and Inference for Categorical Data. *Categorical Data Analysis*, 2nd ed., Chapter 1. Wiley. [doi:10.1002/0471249688.ch1](https://doi.org/10.1002/0471249688.ch1).
+2. Efron, B. (1979). Bootstrap Methods: Another Look at the Jackknife. *The Annals of Statistics*, 7(1), 1-26. [doi:10.1214/aos/1176344552](https://doi.org/10.1214/aos/1176344552).
+3. Almgren, R., Thum, C., Hauptmann, E., and Li, H. (2005). *Direct Estimation of Equity Market Impact*. Working paper, 10 May 2005. [Full paper](https://www.cis.upenn.edu/~mkearns/finread/costestim.pdf).
+4. Garleanu, N., and Pedersen, L. H. (2013). Dynamic Trading with Predictable Returns and Transaction Costs. *The Journal of Finance*, 68(6), 2309-2340. [doi:10.1111/jofi.12080](https://doi.org/10.1111/jofi.12080).
+5. Grinold, R. C. (1989). The Fundamental Law of Active Management. *The Journal of Portfolio Management*, 15(3), 30-37. [doi:10.3905/jpm.1989.409211](https://doi.org/10.3905/jpm.1989.409211).
+6. Clarke, R. G., de Silva, H., and Thorley, S. (2002). Portfolio Constraints and the Fundamental Law of Active Management. *Financial Analysts Journal*, 58(5), 48-66. [doi:10.2469/faj.v58.n5.2468](https://doi.org/10.2469/faj.v58.n5.2468).
