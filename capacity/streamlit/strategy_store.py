@@ -30,7 +30,7 @@ DEFAULT_IR_POINTS = pd.DataFrame({
 
 DEFAULT_PARAMETERS: dict[str, Any] = {
     "model_kind": "Three-pillar empirical", "alpha_points": DEFAULT_POINTS, "tc_points": DEFAULT_TC_POINTS,
-    "universe_size": 300, "annual_trades": 971,
+    "universe_size": 300, "annual_trades": 971, "backtest_sd": .03, "backtest_expansion": 1.,
     "turnover": 13.9, "aum0": 3.4, "gross_alpha": 0.5, "tracking_error": 1.3,
     "max_aum": 15.0, "daily": 20.0, "half_life": 10.0,
     "annual_cost_bps": annual_cost_from_buckets(BUCKETS, 13.9),
@@ -127,6 +127,8 @@ def validate_strategy(
         raise ValueError("Daily participation must not exceed 100%; chart horizon must cover current AUM.")
     if any(parameters[key] < 0 for key in ("gross_alpha", "annual_cost_bps", "cost_elasticity", "minimum_ir", "turnover")):
         raise ValueError("Alpha, costs, elasticity and minimum IR cannot be negative.")
+    if not 0<=parameters["backtest_sd"]<=2 or not 0<=parameters["backtest_expansion"]<=3:
+        raise ValueError("Backtest deviation must be between 0 and 2 IR; expansion between 0 and 3.")
     for key in ("regulatory_aum", "competition_aum"):
         if parameters[key] is not None and (not math.isfinite(parameters[key]) or parameters[key] <= 0):
             raise ValueError("Display-marker AUM must be positive or blank.")

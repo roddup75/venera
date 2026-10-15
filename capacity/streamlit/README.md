@@ -52,3 +52,10 @@ Private cases remain in `data/strategies.user.json` (never committed). Old cases
 ```
 
 See [METHODOLOGY.md](METHODOLOGY.md) for details and academic references.
+
+
+## Backtest uncertainty
+
+Model Calibration → d) Backtest uncertainty sets `backtest_sd` (default 0.03 IR at current AUM) and `backtest_expansion` (default 1). Deviation scales as `(AUM/current_AUM)**rate`. Saved strategies preserve both; older strategies receive defaults. The fitted backtest curve stays central. Full paths use one Gaussian shock across all AUMs, so errors are perfectly correlated and pointwise bands widen with AUM. These are assumed estimation-uncertainty inputs, not standard errors fitted from the observations.
+
+Monte Carlo mode shows exact Gaussian P20–P80 IR bands, simulated first-crossing capacity percentiles and CSV exports. Unreached paths remain censored beyond the independent backtest chart horizon. Summary compares both approaches and overlays their capacity histograms. Deterministic mode hides result bands/intervals. Use the ADV sample count and seed, with a separate backtest random stream. `test_backtest_uncertainty.py` checks Gaussian calibration, full-path coherence, crossings including turning points and censoring.

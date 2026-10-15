@@ -22,7 +22,7 @@
 \vspace{3mm}
 {\large Objectives, Approaches and Calibration\par}
 \vspace{2mm}
-15 October 2026
+16 October 2026
 \end{center}
 
 \section{Objective of the exercise}
@@ -205,6 +205,33 @@ Also show the pointwise P20--P80 IR band. Seed 2026; $N$ orders per book.};
 {\small\textbf{Figure 1. Sampling workflow.} Reuse the same sampled book at every AUM. Gross alpha at current AUM is fixed; net IR varies through sampled impact costs. Each full IR path is nonincreasing as costs rise and calibrated retention falls. The central curve uses calibrated congestion and mean simulated impact.}
 
 \textbf{What is random?} Within each historical bucket, stock counts follow a multinomial distribution with fixed $n_b$ and equal probabilities over its compatible stocks. Baseline bucket counts and notional shares are fixed; participation within buckets and future migration vary. Multinomial sampling is a standard count model~\cite{agresti}; CSV resampling is the empirical bootstrap~\cite{efron}. The seed makes draws reproducible.
+
+\newpage
+\subsection{Backtest uncertainty: wider ranges at higher AUM}
+Keep the fitted backtest curve $\mu(A)=a-bA^\gamma$ as the central estimate. Set the IR standard deviation $s_0$ at current AUM $A_0$, and the expansion rate $k$:
+\[
+\sigma(A)=s_0(A/A_0)^k,\qquad
+IR_j(A)=\mu(A)+Z_j\sigma(A),\quad Z_j\sim N(0,1).
+\]
+Defaults are $s_0=0.03$ IR and $k=1$: deviation doubles at twice current AUM. Rate zero gives constant width; rate two quadruples deviation at twice current AUM. Zero deviation removes uncertainty. These are user assumptions, not standard errors estimated from saved backtest observations.
+
+\begin{center}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Expansion rate & SD at current AUM & SD at $2A_0$ & SD at $3A_0$ \\
+\midrule
+0 (constant) & 0.03 & 0.03 & 0.03 \\
+1 (linear) & 0.03 & 0.06 & 0.09 \\
+2 (quadratic) & 0.03 & 0.12 & 0.27 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The pointwise P20--P80 band is $\mu(A)\pm0.8416\sigma(A)$, the central 60\% of each Gaussian marginal. Draw one shock per complete path and reuse it across AUM, so path errors are perfectly correlated. This avoids independent point noise; it is an explicit modelling assumption, not an estimated correlation structure.
+
+For every simulated path, solve the first crossing of minimum IR, starting at USD 0.5bn. Large expansion can make optimistic paths turn upward: the search checks the path minimum as well as its endpoint. Paths already below the threshold start at USD 0.5bn; unreached paths remain right-censored beyond the backtest horizon. Retain them when calculating capacity P20, median and P80.
+
+Use the shared sample count and seed with a separate random stream from liquidity sampling. The backtest search uses the selected chart horizon independently of the empirical retention boundary. Summary compares both capacity ranges and histograms. Deterministic mode hides result bands and capacity intervals. Repeated backtests or a return-series block bootstrap could later supply evidence for these uncertainty inputs.
 
 \newpage
 \subsection{Interpretation and limitations}

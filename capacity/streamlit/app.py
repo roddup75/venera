@@ -12,6 +12,7 @@ from capacity_model import Scenario, MIN_AUM, validate_trades
 from empirical_model import EmpiricalIRModel
 from universe_sampler import create_liquidity_engine, ADV_POINTS
 from bucket_sampler import bucket_migration, mean_bucket_migration
+from backtest_uncertainty import BacktestUncertainty
 from impact_cost import fit_impact_cost, impact_bps, impact_curve
 from transfer_coefficient import TransferCoefficientModel
 from alpha_decay import AlphaDecayModel
@@ -187,7 +188,7 @@ with st.sidebar:
     uncertainty_source="Stock selections only"
     mc_samples=int(st.session_state.get(demo_key+"samples",saved["mc_samples"]))
     mc_seed=int(st.session_state.get(demo_key+"seed",saved["mc_seed"]))
-    st.caption("Only stock selections vary. Sample count and seed are in Model Calibration → ADV bucket sampler.")
+    st.caption("Empirical bands vary stock selections; backtest bands use calibrated Gaussian uncertainty. Sample count and seed are in Model Calibration → ADV bucket sampler.")
     with st.expander("Execution reference"):
         daily=st.number_input("Daily participation (% ADV)",.1,100.,float(saved["daily"]),.5,key=main_key+"daily",
             help="Used by the execution-time reference in alpha calibration. It does not change order/ADV buckets or the combined IR curve.")
@@ -273,9 +274,9 @@ scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_
                     annual_cost_bps=annual_cost_bps, cost_elasticity=cost_elasticity)
 with execution:
     st.subheader("Model Calibration")
-    st.caption("Calibrate the relative shape of the three pillars here. Gross alpha in Capacity Lab fixes the level at current AUM. Changes update Empirical IR curve and Summary; calculations start at USD 500m.")
-    sampler_tab, alpha_tab, tc_tab = st.tabs([
-        "a) ADV bucket sampler", "b) Alpha decay", "c) Transfer coefficient decay",
+    st.caption("Calibrate the relative shape of the three pillars here. Gross alpha in Capacity Lab fixes the level at current AUM. The backtest uncertainty tab calibrates the independent Backtest IR curve. Changes update Summary; calculations start at USD 500m.")
+    sampler_tab, alpha_tab, tc_tab, backtest_calibration_tab = st.tabs([
+        "a) ADV bucket sampler", "b) Alpha decay", "c) Transfer coefficient decay", "d) Backtest uncertainty",
     ])
     demo_key = main_key+"pillars::"
     with sampler_tab:
@@ -513,6 +514,35 @@ with execution:
             st.download_button("Export transfer-coefficient demo CSV",tc_curve.to_csv(index=False),"demo_transfer_coefficient.csv","text/csv")
             st.download_button("Download TC settings",json.dumps({"pillar":"Transfer coefficient","tc_points":candidate_tc_points,"aum_curvature":candidate_tc.k,"tc_alpha_curvature":candidate_tc.gamma},indent=2),"tc_calibration.json","application/json")
 
+
+    with backtest_calibration_tab:
+        st.write("Calibrate uncertainty around the fitted backtest IR curve. The fitted curve stays the central estimate; the band widens as AUM grows.")
+        c1,c2=st.columns(2)
+        backtest_sd=c1.number_input("Backtest IR deviation at current AUM",0.,2.,float(saved["backtest_sd"]),.01,format="%.2f",key=demo_key+"backtest_sd",
+            help="Standard deviation in IR units, not a percentage. A value of 0.03 gives a Gaussian P20–P80 band of approximately ±0.025 IR at current AUM. Zero removes uncertainty.")
+        backtest_expansion=c2.slider("Backtest uncertainty expansion rate",0.,3.,float(saved["backtest_expansion"]),.1,key=demo_key+"backtest_expansion",
+            help="Deviation scales as (AUM/current AUM)^rate. Rate 0 gives constant width; 1 doubles deviation at ×2 AUM; 2 quadruples it.")
+        st.caption(f"At current AUM: deviation {backtest_sd:.2f} IR. At ×2: {backtest_sd*2**backtest_expansion:.2f}; at ×3: {backtest_sd*3**backtest_expansion:.2f}. The P20–P80 range covers the central 60% of the assumed Gaussian distribution.")
+        if backtest_a is not None:
+            preview=BacktestUncertainty(backtest_a,backtest_b,backtest_gamma,aum0,backtest_sd,backtest_expansion,int(mc_samples),int(mc_seed))
+            preview_grid=np.unique(np.r_[np.linspace(.5,max_aum,121),aum0])
+            preview_data=preview.curve(preview_grid)
+            fig=go.Figure()
+            fig.add_scatter(x=preview_grid,y=preview_data['Backtest net IR P80'],mode='lines',line_width=0,showlegend=False)
+            fig.add_scatter(x=preview_grid,y=preview_data['Backtest net IR P20'],mode='lines',line_width=0,fill='tonexty',fillcolor='rgba(85,153,221,0.20)',name='Backtest P20–P80')
+            fig.add_scatter(x=preview_grid,y=preview_data['Backtest net IR'],mode='lines',line=dict(color=GREEN),name='Fitted backtest IR')
+            fig.add_scatter(x=[aum0],y=[float(preview.mean(aum0))],mode='markers',marker=dict(color='#ff9f43',size=10),name='Current AUM')
+            fig.update_layout(title='Backtest uncertainty calibration',xaxis_title='AUM (USD bn)',yaxis_title='Information ratio')
+            fig.update_xaxes(range=[.5,max_aum])
+            st.plotly_chart(style_figure(fig),width="stretch")
+            with st.expander("Backtest uncertainty assumptions and data"):
+                st.caption("These controls describe assumed uncertainty in backtest estimates; they are not estimated from the saved point observations. One Gaussian shock is reused across each complete curve, giving perfectly correlated errors across AUM. Large expansion can produce paths that flatten or rise; capacity uses the first threshold crossing. Alpha, TC and liquidity sampling do not enter this independent backtest model.")
+                st.caption("The default deviation is 0.03 IR and expansion rate is 1. Sample count and seed are shared with the ADV controls, using an independent random stream. Deterministic mode hides result bands and capacity intervals. Save through Inputs & strategy to persist these settings.")
+                display_table(preview_data,hide_index=True,width="stretch")
+                st.download_button("Export backtest calibration CSV",preview_data.to_csv(index=False),"backtest_uncertainty_calibration.csv","text/csv")
+
+backtest_horizon=float(max_aum)
+
 try:
     engine=EmpiricalIRModel(scenario,alpha_points,tc_points,active_buckets,active_trades,turnover,calculation_mode,int(mc_samples),int(mc_seed),active_adv_points,universe_size,annual_trades)
     if max_aum>engine.maximum:
@@ -562,6 +592,20 @@ if strategy_ir_fit is not None and backtest_a is not None:
 else:
     active_backtest_a = active_backtest_b = active_backtest_gamma = np.nan
     current_backtest_ir = zero_aum = minimum_ir_aum = np.nan
+
+
+backtest_model=None
+backtest_draws=None
+backtest_interval=None
+if np.isfinite(active_backtest_a):
+    backtest_model=BacktestUncertainty(active_backtest_a,active_backtest_b,active_backtest_gamma,aum0,
+                                     backtest_sd,backtest_expansion,int(mc_samples),int(mc_seed))
+    if calculation_mode=="Monte Carlo":
+        backtest_draws=backtest_model.capacity_samples(minimum_ir,backtest_horizon)
+        backtest_interval=backtest_model.capacity_interval(backtest_draws)
+
+def backtest_percentile_display(value):
+    return f"${value:.2f}bn" if value is not None else f"> ${backtest_horizon:.2f}bn"
 
 with overview:
     st.caption(f"Gross alpha is anchored to {gross_alpha:.2f}% per year at current AUM (${aum0:.2f}bn). Alpha-decay and TC calibrations define relative retention; full estimated impact costs are deducted once.")
@@ -635,26 +679,34 @@ with summary:
          'AUM at minimum IR (central)':f"${minimum_ir_aum:.2f}bn" if np.isfinite(minimum_ir_aum) else 'Not reached',
          'AUM at zero IR (central)':f"${zero_aum:.2f}bn" if np.isfinite(zero_aum) else 'Not reached'}])
     if capacity_uncertainty is not None:
-        comparison['Capacity P20']=[percentile_display(capacity_uncertainty['P20']),'Not simulated']
-        comparison['Capacity median']=[percentile_display(capacity_uncertainty['P50']),'Not simulated']
-        comparison['Capacity P80']=[percentile_display(capacity_uncertainty['P80']),'Not simulated']
+        comparison['Capacity P20']=[percentile_display(capacity_uncertainty['P20']),backtest_percentile_display(backtest_interval['P20']) if backtest_interval else 'Unavailable']
+        comparison['Capacity median']=[percentile_display(capacity_uncertainty['P50']),backtest_percentile_display(backtest_interval['P50']) if backtest_interval else 'Unavailable']
+        comparison['Capacity P80']=[percentile_display(capacity_uncertainty['P80']),backtest_percentile_display(backtest_interval['P80']) if backtest_interval else 'Unavailable']
     display_table(comparison,hide_index=True,width="stretch")
     st.subheader("Both approaches across AUM")
     comparison_scenarios=pd.DataFrame({'AUM (USD bn)':scenario_aums,
         'Empirical net IR':[m['Net IR'] for m in scenario_metrics],
         'Backtest net IR':[active_backtest_a-active_backtest_b*a**active_backtest_gamma if np.isfinite(active_backtest_a) else np.nan for a in scenario_aums]})
+    if backtest_interval is not None:
+        bands=backtest_model.curve(scenario_aums)
+        comparison_scenarios['Backtest net IR P20']=bands['Backtest net IR P20']
+        comparison_scenarios['Backtest net IR P80']=bands['Backtest net IR P80']
+        comparison_scenarios['Empirical net IR P20'],comparison_scenarios['Empirical net IR P80']=np.quantile(engine.simulated_curves(scenario_aums),[.2,.8],axis=0)
     display_table(comparison_scenarios,hide_index=True,width="stretch")
     # The simulation section follows both tables; its metrics sit below the histogram.
     if capacity_uncertainty is not None:
         st.subheader("Simulation distribution")
         reached=capacity_draws.loc[capacity_draws['Threshold reached']]
-        if len(reached):
-            fig=px.histogram(reached,x='AUM at minimum IR (USD bn)',nbins=40,
-                title='Distribution of AUM at minimum IR',color_discrete_sequence=[GREEN])
+        hist_data=reached.assign(Approach='Empirical')
+        if backtest_draws is not None:
+            hist_data=pd.concat([hist_data,backtest_draws.loc[backtest_draws['Threshold reached']].assign(Approach='Backtest')],ignore_index=True)
+        if len(hist_data):
+            fig=px.histogram(hist_data,x='AUM at minimum IR (USD bn)',color='Approach',nbins=40,barmode='overlay',opacity=.65,
+                title='Distribution of AUM at minimum IR',color_discrete_map={'Empirical':GREEN,'Backtest':BLUE})
             fig.update_layout(yaxis_title='Simulations',xaxis_title='AUM at minimum IR (USD bn)')
             for key,color in [('P20',BLUE),('P50',AMBER),('P80',BLUE)]:
                 value=capacity_uncertainty[key]
-                if value is not None:fig.add_vline(x=value,line_color=color,line_dash='dash',annotation_text=key)
+                if value is not None:fig.add_vline(x=value,line_color=color,line_dash='dash',annotation_text='Empirical '+key)
             st.plotly_chart(style_figure(fig),width="stretch")
         cells=st.columns(4)
         cells[0].metric("Capacity P20",percentile_display(capacity_uncertainty['P20']))
@@ -667,6 +719,8 @@ with summary:
             st.caption("The capacity range is narrower than $0.01bn; its endpoints round to the same displayed value. The histogram and CSV retain full precision.")
         if capacity_uncertainty['Censored simulations']:
             st.caption(f"{capacity_uncertainty['Censored simulations']:,} simulations remain beyond ${max_aum:.2f}bn and are included in the percentile calculation. The histogram shows reached crossings only.")
+        if backtest_interval is not None:
+            st.caption(f"Backtest capacity: P20 {backtest_percentile_display(backtest_interval['P20'])}, median {backtest_percentile_display(backtest_interval['P50'])}, P80 {backtest_percentile_display(backtest_interval['P80'])}. Threshold reached in {backtest_interval['Threshold reached (%)']:.2f}% of draws. Unreached paths remain beyond the backtest search horizon of ${backtest_horizon:.2f}bn; they are retained in the percentiles. Backtest ranges reflect assumed estimation uncertainty; empirical ranges reflect stock selections.")
         st.download_button('Export simulated capacity crossings CSV',capacity_draws.assign(seed=int(mc_seed),uncertainty_source=uncertainty_source).to_csv(index=False),'simulated_capacity_crossings.csv','text/csv')
 
 with backtest_ir:
@@ -702,10 +756,14 @@ with backtest_ir:
         metrics[3].metric("Model R²", f"{parameter_r_squared:.4f}")
         metrics[4].metric("Model γ", f"{fit_gamma:.3f}")
 
-        fit_horizon = max(float(max_aum), float(observed_x.max()), float(aum0))
+        fit_horizon = backtest_horizon
         fit_x = np.linspace(MIN_AUM, fit_horizon, 301)
         fit_y = fit_a - fit_b * fit_x ** fit_gamma
         fig = go.Figure()
+        backtest_curve=backtest_model.curve(np.unique(np.r_[fit_x,aum0]))
+        if calculation_mode=="Monte Carlo":
+            fig.add_scatter(x=backtest_curve['AUM (USD bn)'],y=backtest_curve['Backtest net IR P80'],mode='lines',line_width=0,showlegend=False)
+            fig.add_scatter(x=backtest_curve['AUM (USD bn)'],y=backtest_curve['Backtest net IR P20'],mode='lines',line_width=0,fill='tonexty',fillcolor='rgba(85,153,221,0.20)',name='Backtest P20–P80')
         fig.add_scatter(
             x=fit_x, y=fit_y, mode="lines", name="Fitted backtest IR",
             line=dict(color=GREEN, width=3),
@@ -725,6 +783,10 @@ with backtest_ir:
             x=float(aum0), line_dash="dot", line_color=BLUE,
             annotation_text=f"Current AUM ${aum0:g}bn", annotation_font_color=BLUE,
         )
+        fig.add_scatter(x=[aum0],y=[current_backtest_ir],mode='markers',marker=dict(color='#ff9f43',size=10),name='Current AUM')
+        if backtest_interval is not None:
+            lo,hi=backtest_interval['P20'],backtest_interval['P80']
+            if lo is not None:fig.add_vrect(x0=lo,x1=hi if hi is not None else fit_horizon,fillcolor=BLUE,opacity=.1,line_width=0)
         add_aum_markers(fig, aum_markers, fit_horizon)
         fig.update_layout(
             title="Backtest information ratio by AUM",
@@ -740,6 +802,15 @@ with backtest_ir:
             "changing the strategy. Treat the curve as empirical strategy evidence alongside the empirical capacity curve."
         )
 
+        if backtest_interval is not None:
+            c1,c2,c3=st.columns(3)
+            c1.metric('Backtest capacity P20',backtest_percentile_display(backtest_interval['P20']))
+            c2.metric('Backtest capacity median',backtest_percentile_display(backtest_interval['P50']))
+            c3.metric('Backtest capacity P80',backtest_percentile_display(backtest_interval['P80']))
+            st.caption(f"Gaussian uncertainty: deviation {backtest_sd:.2f} IR at current AUM; expansion rate {backtest_expansion:.2f}. The band is pointwise P20–P80. Capacity percentiles use {mc_samples:,} correlated full-curve draws, with unreached paths retained beyond the horizon. Adjust in Model Calibration → Backtest uncertainty.")
+            st.download_button('Export backtest capacity crossings CSV',backtest_draws.assign(seed=int(mc_seed),backtest_sd=backtest_sd,backtest_expansion=backtest_expansion).to_csv(index=False),'backtest_capacity_crossings.csv','text/csv')
+        display_table(backtest_curve if calculation_mode=="Monte Carlo" else backtest_curve[['AUM (USD bn)','Backtest net IR']],hide_index=True,width="stretch")
+        st.download_button('Export backtest IR curve CSV',backtest_curve.assign(backtest_sd=backtest_sd,backtest_expansion=backtest_expansion).to_csv(index=False),'backtest_ir_curve.csv','text/csv')
 
 with methodology:
     st.download_button("Download methodology PDF", (Path(__file__).parent / "methodology.pdf").read_bytes(),
@@ -767,7 +838,8 @@ with creator:
             parameters = {**saved, "engine_name": "Three-pillar empirical", "model_kind": model_kind, "alpha_points": alpha_points, "tc_points": tc_points, "aum0": aum0,
                           "gross_alpha": gross_alpha, "tracking_error": tracking_error,
                           "universe_size":universe_size,"annual_trades":annual_trades,
-                          "max_aum": max_aum, "turnover": turnover, "daily": daily, "half_life": half_life,
+                          "backtest_sd":backtest_sd,"backtest_expansion":backtest_expansion,
+                          "max_aum": backtest_horizon, "turnover": turnover, "daily": daily, "half_life": half_life,
                           "annual_cost_bps": annual_cost_bps, "cost_elasticity": cost_elasticity,
                           "calculation_mode": calculation_mode, "mc_samples": int(mc_samples), "mc_seed": int(mc_seed),
                           "minimum_ir": minimum_ir, "retained_threshold": retained_threshold,

@@ -285,6 +285,8 @@ class AppTests(unittest.TestCase):
                 next(n for n in app.number_input if n.label=='Sampler Monte Carlo samples').set_value(100).run()
                 next(n for n in app.number_input if n.label=='Sampler random seed').set_value(42).run()
                 next(n for n in app.number_input if n.label=='Baseline gross alpha (%)').set_value(.73).run()
+                next(n for n in app.number_input if n.label=='Backtest IR deviation at current AUM').set_value(.08).run()
+                next(n for n in app.slider if n.label=='Backtest uncertainty expansion rate').set_value(1.5).run()
                 before=next(m.value for m in app.metric if m.label=='Current net IR')
                 next(n for n in app.text_input if n.label=='Strategy name').set_value('Empirical copy')
                 next(b for b in app.button if b.label=='Save strategy').click().run()
@@ -298,6 +300,8 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(params['mc_samples'],100)
                 self.assertEqual(params['mc_seed'],42)
                 self.assertEqual(params['gross_alpha'],.73)
+                self.assertEqual(params['backtest_sd'],.08)
+                self.assertEqual(params['backtest_expansion'],1.5)
                 self.assertEqual(saved['methodology'],'three-pillar-calibrated-books-v5')
                 self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),before)
 
@@ -324,3 +328,25 @@ class AppTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+    def test_backtest_uncertainty_calibration_drives_bands_and_summary(self):
+        import json
+        app=self.app()
+        self.assertIn('d) Backtest uncertainty',[t.label for t in app.tabs])
+        def comparison():return next(d.value for d in app.dataframe if 'Approach' in d.value.columns)
+        def plot():return next(json.loads(c.proto.spec) for c in app.get('plotly_chart') if json.loads(c.proto.spec).get('layout',{}).get('title',{}).get('text')=='Backtest information ratio by AUM')
+        before=comparison().copy()
+        self.assertNotEqual(before.loc[1,'Capacity P20'],before.loc[1,'Capacity P80'])
+        self.assertTrue(any(t.get('name')=='Backtest P20–P80' for t in plot()['data']))
+        next(n for n in app.number_input if n.label=='Backtest IR deviation at current AUM').set_value(.1).run()
+        next(n for n in app.slider if n.label=='Backtest uncertainty expansion rate').set_value(2.).run()
+        after=comparison()
+        self.assertEqual(before.loc[0,'Capacity P20'],after.loc[0,'Capacity P20'])
+        self.assertEqual(before.loc[1,'Current net IR'],after.loc[1,'Current net IR'])
+        self.assertNotEqual(before.loc[1,'Capacity P20'],after.loc[1,'Capacity P20'])
+        next(n for n in app.number_input if n.label=='Backtest IR deviation at current AUM').set_value(0.).run()
+        after=comparison()
+        self.assertEqual(after.loc[1,'Capacity P20'],after.loc[1,'Capacity P80'])
+        next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
+        self.assertFalse(any(t.get('name')=='Backtest P20–P80' for t in plot()['data']))
+        self.assertEqual(len(app.exception),0,str(app.exception))

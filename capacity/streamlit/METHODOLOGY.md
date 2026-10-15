@@ -165,3 +165,12 @@ The references support the sampling methods and economic motivation: count distr
 4. Garleanu, N., and Pedersen, L. H. (2013). Dynamic Trading with Predictable Returns and Transaction Costs. *The Journal of Finance*, 68(6), 2309-2340. [doi:10.1111/jofi.12080](https://doi.org/10.1111/jofi.12080).
 5. Grinold, R. C. (1989). The Fundamental Law of Active Management. *The Journal of Portfolio Management*, 15(3), 30-37. [doi:10.3905/jpm.1989.409211](https://doi.org/10.3905/jpm.1989.409211).
 6. Clarke, R. G., de Silva, H., and Thorley, S. (2002). Portfolio Constraints and the Fundamental Law of Active Management. *Financial Analysts Journal*, 58(5), 48-66. [doi:10.2469/faj.v58.n5.2468](https://doi.org/10.2469/faj.v58.n5.2468).
+
+
+## Backtest uncertainty calibration
+
+Model Calibration → **d) Backtest uncertainty** provides two saved controls: IR standard deviation at current AUM (`backtest_sd`, default 0.03) and expansion rate (`backtest_expansion`, default 1). For fitted mean `mu(A)=a-b*A**gamma`, deviation is `sigma(A)=sd0*(A/current_AUM)**rate`. Rate 0 gives constant width; 1 doubles deviation at twice current AUM; 2 quadruples it. Zero deviation collapses all paths to the fitted curve.
+
+Each full path is `IR_j(A)=mu(A)+Z_j*sigma(A)`, with one standard-normal shock reused across all AUMs. Errors are perfectly correlated across AUM by assumption, and Gaussian at each point. The exact pointwise P20–P80 band is `mu ± 0.8416*sigma`; it describes the central 60%, not a simultaneous band. Inputs are assumed backtest estimation uncertainty, not fitted standard errors. Repeated backtests or a block bootstrap of return histories could later estimate them.
+
+Each path's first minimum-IR crossing gives a capacity observation. The solver checks turning points because sufficiently optimistic paths can flatten or rise at high AUM. Already-below paths return $0.5bn; unreached paths are right-censored at the selected backtest horizon and retained in capacity P20/P50/P80. The backtest horizon is independent of the empirical retention boundary. Sample count and seed are shared with the ADV controls, but a separate random stream makes the approaches independent. Summary includes both ranges, scenario bands and an overlaid histogram; the backtest tab exports the curve and every capacity draw. Deterministic mode hides result bands and intervals.

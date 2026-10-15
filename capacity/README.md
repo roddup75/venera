@@ -17,3 +17,5 @@ streamlit run app.py
 ```
 
 See [Streamlit README](streamlit/README.md) and [methodology](streamlit/METHODOLOGY.md).
+
+Backtest uncertainty has a separate calibration tab: set IR deviation at current AUM and its expansion rate to generate widening Gaussian bands and a P20–P80 capacity interval alongside empirical results.
