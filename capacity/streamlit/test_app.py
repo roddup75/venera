@@ -72,17 +72,17 @@ class AppTests(unittest.TestCase):
         def plot(title):
             return next(json.loads(c.proto.spec) for c in app.get('plotly_chart') if json.loads(c.proto.spec).get('layout',{}).get('title',{}).get('text')==title)
         self.assertEqual(next(s.value for s in app.selectbox if s.label=='Calculation mode'),'Monte Carlo')
-        self.assertEqual(len(plot('Net information ratio')['data']),3)
+        self.assertEqual(len(plot('Net information ratio')['data']),4)
         self.assertTrue(any(m.label=='Capacity P20' for m in app.metric))
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
-        self.assertEqual(len(plot('Net information ratio')['data']),1)
-        self.assertEqual(len(plot('Net alpha')['data']),1)
+        self.assertEqual(len(plot('Net information ratio')['data']),2)
+        self.assertEqual(len(plot('Net alpha')['data']),2)
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Monte Carlo').run()
         for title in ['Net information ratio','Net alpha']:
-            self.assertEqual(len(plot(title)['data']),3)
-            self.assertEqual(plot(title)['data'][-1]['fill'],'tonexty')
+            self.assertEqual(len(plot(title)['data']),4)
+            self.assertEqual(plot(title)['data'][-2]['fill'],'tonexty')
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
-        self.assertEqual(len(plot('Net information ratio')['data']),1)
+        self.assertEqual(len(plot('Net information ratio')['data']),2)
         self.assertEqual(len(app.exception),0,str(app.exception))
 
     def test_capacity_interval_summary_and_censoring_follow_threshold(self):

@@ -595,6 +595,9 @@ with overview:
             fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
         if max_aum > last_calibration_aum:
             fig.add_vrect(x0=last_calibration_aum, x1=max_aum, fillcolor=AMBER, opacity=.08, line_width=0, annotation_text="Extrapolation")
+        fig.add_scatter(x=[aum0],y=[base[columns[0]]],mode="markers",name="Current AUM",
+            marker=dict(color="#ff9f43",size=12,symbol="circle",line=dict(color=TEXT,width=1)),
+            hovertemplate="Current AUM: $%{x:.2f}bn<br>"+ylabel+": %{y:.2f}<extra></extra>")
         add_aum_markers(fig, aum_markers, max_aum)
         fig.update_xaxes(title="AUM (USD bn)", range=[MIN_AUM, max_aum] if max_aum > MIN_AUM else [MIN_AUM, MIN_AUM+.01])
         st.plotly_chart(style_figure(fig), width="stretch")
