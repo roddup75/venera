@@ -330,10 +330,16 @@ with execution:
         demo_seed=controls[1].number_input("Sampler random seed",0,2**32-1,int(mc_seed),1,key=demo_key+"seed")
         turnover=controls[2].number_input("Impact one-way annual turnover (%)",min_value=0.,value=float(saved.get("turnover",13.9)),step=.5,key=demo_key+"impact_turnover",help="Annual portfolio drag = 2 × one-way turnover fraction × impact per traded dollar.")
         sample_aum_key=demo_key+"sample_aum"
-        if sample_aum_key in st.session_state and st.session_state[sample_aum_key]>max_aum:
-            st.session_state[sample_aum_key]=max_aum
-        sample_aum_default={} if sample_aum_key in st.session_state else {"value":MIN_AUM}
-        sample_aum=st.number_input("Sampler AUM (USD bn)",min_value=MIN_AUM,max_value=float(max_aum),step=.1,key=sample_aum_key,**sample_aum_default)
+        previous_anchor=st.session_state.get(demo_key+"preview_anchor")
+        preview=st.session_state.get(sample_aum_key)
+        if previous_anchor is None or preview is None or np.isclose(preview,previous_anchor,rtol=0,atol=1e-9):
+            st.session_state[sample_aum_key]=float(aum0)
+        elif preview>max_aum:
+            st.session_state[sample_aum_key]=float(max_aum)
+        st.session_state[demo_key+"preview_anchor"]=float(aum0)
+        sample_aum=st.number_input("Sampler AUM (USD bn)",min_value=MIN_AUM,max_value=float(max_aum),step=.1,key=sample_aum_key,
+                                   help="The supplied buckets describe current AUM. Preview defaults to current AUM; changing it scales orders for a scenario without changing the baseline buckets.")
+        st.caption(f"Bucket baseline: current AUM (${aum0:g}bn). Preview order sizes are scaled by {sample_aum/aum0:.2f}×. The empirical net-IR anchor remains $0.5bn.")
         st.caption("Bucket mode draws orders using observed count shares, average order notionals and the representative order/ADV values in Inputs & strategy. Trade CSV mode resamples complete observed orders. ADV stays fixed while order sizes scale from current AUM.")
         if is_combined:
             mc_samples=int(demo_samples)

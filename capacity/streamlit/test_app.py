@@ -76,7 +76,7 @@ class AppTests(unittest.TestCase):
     def test_demo_controls_and_500m_grid(self):
         app=self.app()
         sampler_aum=next(n for n in app.number_input if n.label=='Sampler AUM (USD bn)')
-        self.assertEqual(sampler_aum.value,.5)
+        self.assertEqual(sampler_aum.value,next(n.value for n in app.number_input if n.label=='Current AUM ($bn)'))
         plots=app.get('plotly_chart')
         import json
         for chart in plots:
@@ -87,6 +87,19 @@ class AppTests(unittest.TestCase):
         next(n for n in app.number_input if n.label=='Sampler Monte Carlo samples').set_value(100).run()
         self.assertEqual(len(app.exception),0,str(app.exception))
         self.assertEqual(next(n for n in app.number_input if n.label=='Simulated book to inspect').value,100)
+
+    def test_sampler_preview_follows_anchor_until_custom_scenario(self):
+        app=self.app()
+        def field(label):return next(n for n in app.number_input if n.label==label)
+        self.assertEqual(field('Sampler AUM (USD bn)').value,field('Current AUM ($bn)').value)
+        book=next(d.value for d in app.dataframe if 'Baseline order/ADV (%)' in d.value.columns)
+        self.assertEqual(book['Baseline order/ADV (%)'].tolist(),book['Order/ADV at selected AUM (%)'].tolist())
+        field('Current AUM ($bn)').set_value(6.).run()
+        self.assertEqual(field('Sampler AUM (USD bn)').value,6.)
+        field('Sampler AUM (USD bn)').set_value(2.).run()
+        field('Current AUM ($bn)').set_value(5.).run()
+        self.assertEqual(field('Sampler AUM (USD bn)').value,2.)
+        self.assertEqual(len(app.exception),0,str(app.exception))
 
     def test_three_point_calibration_apply_and_cost_isolation(self):
         app=self.app()
@@ -117,7 +130,7 @@ class AppTests(unittest.TestCase):
         self.assertFalse(any('Demo signal' in n.label or 'Impact intercept' in n.label for n in app.number_input))
         base_ir=metric('Current net IR')
         before=float(metric('Sampled weighted impact').split()[0])
-        next(n for n in app.number_input if n.label=='Sampler AUM (USD bn)').set_value(3.4).run()
+        next(n for n in app.number_input if n.label=='Sampler AUM (USD bn)').set_value(6.).run()
         self.assertGreater(float(metric('Sampled weighted impact').split()[0]),before)
         self.assertEqual(metric('Current net IR'),base_ir)
         impact=metric('Sampled weighted impact')
@@ -216,7 +229,7 @@ class AppTests(unittest.TestCase):
         with patch.object(strategy_store,'load_strategies',return_value={'Trade strategy':source}):
             app=self.app()
             self.assertEqual(next(m for m in app.metric if m.label=='Orders in sampled book').value,'2')
-            self.assertEqual(next(n for n in app.number_input if n.label=='Sampler AUM (USD bn)').value,.5)
+            self.assertEqual(next(n for n in app.number_input if n.label=='Sampler AUM (USD bn)').value,next(n.value for n in app.number_input if n.label=='Current AUM ($bn)'))
 
     def test_monte_carlo_default_and_editable_samples(self):
         app=self.app()
