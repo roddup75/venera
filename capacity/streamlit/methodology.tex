@@ -1,272 +1,165 @@
-% Generated from the current Streamlit METHODOLOGY.md on 15 October 2026.
-% Standalone document; no external figures or other project files are required.
+% Current methodology for the default empirical model and backtest comparison.
+% Standalone: no external figures or project dependencies.
 \documentclass[11pt,a4paper]{article}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage[margin=24mm]{geometry}
 \usepackage{amsmath,amssymb,microtype}
-\usepackage{xcolor,hyperref}
+\usepackage{booktabs,tabularx,array,xcolor,hyperref}
 \definecolor{capacitygreen}{HTML}{176B57}
 \hypersetup{colorlinks=true,linkcolor=capacitygreen,urlcolor=capacitygreen,
- pdftitle={Capacity Lab: Capacity Methodology},
- pdfauthor={Capacity Lab}}
+ pdftitle={Capacity Lab: Objectives, Approaches and Calibration},pdfauthor={Capacity Lab}}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{6pt}
 \setlength{\emergencystretch}{2em}
-\title{\textbf{Capacity Lab}\\[5pt]Capacity Methodology}
-\author{Streamlit implementation: execution, alpha decay and TC calibration}
-\date{15 October 2026}
+\renewcommand{\arraystretch}{1.2}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
 \begin{document}
 \begin{center}
 {\LARGE\bfseries Capacity Lab\par}
-\vspace{4mm}
-{\Large Capacity Methodology\par}
-\vspace{4mm}
-Streamlit implementation: execution, alpha decay and TC calibration\\[3mm]
+\vspace{3mm}
+{\large Objectives, Approaches and Calibration\par}
+\vspace{2mm}
 15 October 2026
 \end{center}
-\vspace{4mm}
-Capacity Lab defaults to a combined three-pillar empirical IR curve using estimated impact, alpha decay and TC decay. Section 14 defines the combination. Execution delay and isolated calibrations remain available as comparison modes. The execution model estimates how larger orders take longer to execute and capture less of a decaying signal. It uses Monte Carlo parent-order resampling by default, with a notional-weighted execution-delay calculation inside each simulated book. There is no migration distribution.
 
-\section{Baseline inputs}
+\section{Objective of the exercise}
+Estimate how a strategy's net performance changes as assets under management (AUM) grow, and identify the AUM at which its net information ratio (IR) reaches a chosen minimum. The exercise supports capacity planning: it explains the assumptions behind an indicated capacity, rather than treating capacity as a single fixed property of the strategy.
 
-Let $A_0$ be current AUM, $s=A/A_0$, $q_i$ the total positive parent-order notional, $V_i$ its average daily traded value and $x_i=q_i/V_i$. Orders and ADV must use the same currency. Buys and sells enter as positive traded amounts. Each order scales proportionally with AUM; liquidity, portfolio construction, order frequency and turnover stay fixed.
+The dashboard reports net IR, annual net alpha and the AUM associated with the minimum-IR and zero-IR thresholds. IR is net alpha divided by tracking error. Use the same return horizon and risk conventions when comparing results.
 
-A trade CSV supplies \texttt{q} and \texttt{adv}, with weights $w_i=q_i/\sum_j q_j$. With bucket inputs, each bucket supplies one editable representative $x_b$ (\texttt{p}, a \textbf{fraction}, despite its legacy name), traded value $Q_b$ and count $n_b$. We use $w_b=Q_b/\sum_j Q_j$; reported rounded share percentages do not determine weights. Counts determine bucket-membership probabilities in Monte Carlo and the count-weighted multi-day diagnostic; traded values determine the notional of each proxy order. Existing buckets describe total parent orders, as confirmed by the user.
+\textbf{Two AUM references have different jobs.} Current AUM anchors the supplied trading observations: the ADV buckets describe orders traded at current strategy size. USD 0.5bn is the starting point of the calibrated net-IR curve. The sampler preview defaults to current AUM; the empirical curve starts at USD 0.5bn.
 
-The bucket version approximates the unknown within-bucket distribution. Generally $g(E[D])\ne E[g(D)]$, so representative points do not reproduce a full trade tape. Vary representative points within their bounds to assess this assumption, especially for large orders. For an open-ended tail, supply an explicit finite representative and stress range. No universe ADV distribution is needed once order/ADV ratios and notional weights are available.
+\section{Two complementary approaches}
+\subsection{Empirical approach}
+The \textbf{Empirical IR curve} combines observed trading and liquidity inputs with three calibrated model pillars: impact costs, alpha decay and transfer-coefficient (TC) decay. It answers: \emph{what happens to performance if orders grow and the chosen execution and implementation assumptions hold?}
 
-\section{Execution time and absolute signal capture}
+Trading observations inform the impact-cost pillar. Alpha-decay and TC points are user estimates; they are not automatically inferred from trade history. The approach makes these assumptions visible and lets users adjust them in Model Calibration.
 
-With a fixed daily participation fraction $p$ and signal half-life $h$ in trading days:
+\subsection{Backtest approach}
+The \textbf{Backtest IR curve} fits a decreasing power curve to AUM and IR observations from optimised historical backtests. It provides a separate estimate of capacity based on the strategy's behaviour in those backtests.
 
-\begin{equation}
-D_i(s)=\frac{s x_i}{p},\qquad \lambda=\frac{\log 2}{h}.
-\end{equation}
+Use comparable observations: the same investment period, risk conventions and cost definitions. The fitted curve can be adjusted in the sidebar. Illustrative dashboard observations must be replaced before treating this comparison as historical evidence.
 
-Uniform execution over $[0,D]$ gives:
+\textbf{Read the approaches together.} Summary compares their current IR and capacity thresholds. Differences can reveal assumptions that need review. The two curves remain separate; the dashboard does not average them or use the backtest fit to calibrate the empirical pillars.
 
-\begin{equation}
-g(D;h)=\frac{1-e^{-\lambda D}}{\lambda D},\qquad g(0;h)=1.
-\end{equation}
+\newpage
+\section{Empirical approach: inputs, pillars and calibration}
+\subsection{Inputs}
+Start in \textbf{Inputs \& strategy} and confirm that the trading observations correspond to the selected current AUM.
 
-Execution times are continuous trading-day equivalents: an order can finish intraday. There is no minimum one-day floor, horizon cap, grandfathered participation or unfinished-order adjustment. This model assumes every order eventually completes; it does not simulate overlapping orders, cancellation or changing signals.
+\begin{tabularx}{\textwidth}{@{}p{.27\textwidth}L@{}}
+\toprule
+Input & Purpose and units \\
+\midrule
+Current AUM & Size at which the observed orders apply; USD billions. \\
+ADV buckets & Parent-order size divided by average daily traded value (ADV), grouped into liquidity buckets. \\
+Order counts and value & Counts determine sampling probabilities; traded value determines portfolio cost weights. \\
+Estimated bucket impact & Positive cost in basis points (bp) per traded dollar. \\
+One-way annual turnover & Annual buys plus sells divided by AUM is twice this turnover fraction. \\
+Tracking error & Fixed annual active-return risk, entered in percent. \\
+Calibration triples & Three points for alpha decay and three for TC; detailed on the next page. \\
+Minimum net IR & Performance threshold used to indicate capacity. \\
+\bottomrule
+\end{tabularx}
 
-\section{Relative alpha capture}
+Alternatively, upload actual parent orders with positive \texttt{q} (order notional) and \texttt{adv} (average daily traded value) in the same currency. The CSV supplies order sizes and liquidity; estimated bucket costs still supply the impact-curve calibration.
 
-\begin{equation}
-G(s)=\sum_i w_i g(D_i(s);h),\qquad H(s)=\frac{G(s)}{G(1)}.
-\end{equation}
+\subsection{Three model pillars}
+\subsubsection{Impact costs: larger orders are more expensive to trade}
+The \textbf{ADV bucket sampler} automatically fits a nonnegative power cost curve to the estimated bucket impacts. There are no per-bucket sliders or manual impact-fit controls. Each bucket has equal weight in fitting; aggregate portfolio costs use traded-notional weights.
 
-The dashboard reports \textbf{relative alpha capture} as $100H(s)$ and \textbf{absolute capture} as $100G(s)$. Relative capture equals 100\% at current AUM. In Monte Carlo, apply this normalization within each book and average its results. This is an economic multiplier, not a measured portfolio-construction transfer coefficient. Normalize the weighted aggregate once; do not average per-order capture ratios.
+Order sizes scale in proportion to AUM while ADV stays fixed. A book preview at current AUM reproduces the input order-size scale. Selecting another preview AUM applies a scenario multiplier. The frequency chart compares the same book at current AUM, twice current AUM and three times current AUM; an overflow bucket retains orders beyond the highest boundary.
 
-\section{Fundamental Law of Active Management}
+The sampler reports impact per traded dollar, sampled-order cost in USD and annual portfolio drag. Annual drag in bp equals weighted impact multiplied by twice one-way annual turnover. For example, 13.90\% one-way turnover gives a multiplier of 0.278. This annualisation is separate from pricing the displayed book's orders directly.
 
-The extended Fundamental Law links expected gross information ratio to forecast skill, independent breadth and portfolio-construction efficiency:
+\newpage
+\subsubsection{Alpha decay: execution congestion reduces performance}
+Users specify three \textbf{(AUM, percentage of trades taking more than one day, net IR)} points. The dashboard fits two linked power curves: AUM to multi-day trade percentage, then multi-day trade percentage to IR. Their curvatures are inferred automatically.
 
-\begin{equation}
-IR_{\rm gross}\approx IC\sqrt{BR}\,TC_{\rm construction}.
-\end{equation}
+The starting point is USD 0.5bn with zero multi-day trades. The default assumptions are:
+\begin{center}
+\begin{tabular}{rrr}
+\toprule
+AUM (USD bn) & Trades taking $>1$ day & Net IR \\
+\midrule
+0.50 & 0.00\% & 0.60 \\
+3.00 & 2.00\% & 0.57 \\
+6.00 & 10.00\% & 0.50 \\
+\bottomrule
+\end{tabular}
+\end{center}
+These points isolate alpha decay while other effects are held fixed. Multi-day percentage counts parent orders equally, regardless of notional or forecast strength. It summarises congestion without distinguishing, for example, two-day and ten-day orders.
 
-Here $IC$ is the information coefficient, $BR$ is the number of independent investment decisions per year and $TC_{\rm construction}$ is the construction transfer coefficient. Parent-order count and number of holdings are not estimates of independent breadth. See \href{https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/analysis-active-portfolio-management}{CFA Institute, Analysis of Active Portfolio Management}.
+\subsubsection{Transfer coefficient: implementation efficiency declines}
+Users specify three \textbf{(TC, AUM, annual alpha)} points. The dashboard fits power curves from AUM to TC, then TC to annual alpha. In this exercise, alpha means annual net alpha with other effects fixed.
 
-In this implementation, observed baseline gross alpha after baseline execution anchors the combined baseline effect:
+The default assumptions are:
+\begin{center}
+\begin{tabular}{rrr}
+\toprule
+TC & AUM (USD bn) & Annual alpha \\
+\midrule
+60.00\% & 0.50 & 1.00\% \\
+40.00\% & 3.00 & 0.60\% \\
+25.00\% & 6.00 & 0.30\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+The combined model uses this alpha relationship as a \textbf{relative retention factor}: divide calibrated alpha at each AUM by its initial value. The defaults therefore retain 100.00\%, 60.00\% and 30.00\% of the TC-related alpha at the three AUM points. It does not use the raw TC ratio as the retention factor.
 
-\begin{equation}
-\frac{\alpha_{g,0}}{\sigma_{TE}}\approx IC\sqrt{BR}\,TC_{\rm eff}(1),\qquad TC_{\rm eff}(s)=TC_{\rm eff}(1)H(s).
-\end{equation}
+These triples imply nonlinear AUM-to-TC decay and a linear TC-to-alpha link. Other triples can imply different curvature. The initial 1.00\% is a normalising reference, not a second absolute alpha anchor added to the combined model.
 
-This last relation is a reduced-form economic mapping. Effective TC incorporates implementation capture; neither it nor $H$ is asserted to be a measured forecast/position correlation. Holding forecast skill, independent breadth and construction efficiency fixed as AUM scales gives:
+\newpage
+\subsection{Calibration workflow}
+\begin{enumerate}
+\item Confirm current AUM and the observed orders or buckets in Inputs \& strategy. Check estimated impact costs, tracking error and turnover.
+\item In Model Calibration, inspect the automatically fitted impact curve and the trading-book distribution. Change AUM, sample count, seed or turnover as needed.
+\item Edit the three alpha-decay points and review both linked relationships. AUM points use USD 0.5bn increments; percentages must increase and IR must decrease.
+\item Edit the three TC points. AUM must increase, while TC and annual alpha must decrease. Review the resulting retention factor.
+\item Review Empirical IR curve and Summary. In the default combined model, calibration edits update both immediately. Save through Inputs \& strategy to persist the chosen inputs and settings.
+\end{enumerate}
 
-\begin{equation}
-IR_{\rm net}(s)=\frac{\alpha_{g,0}}{\sigma_{TE}}H(s)-\frac{C_0s^\gamma}{100\sigma_{TE}}.
-\end{equation}
-
-The model does not estimate $IC$, $BR$ or construction TC separately from liquidity buckets. It does not multiply observed gross alpha by these factors again. The execution-capture assumption is an additional model choice, not a result implied by the Fundamental Law alone.
-
-\section{Net alpha, annual costs and IR}
-
-Baseline gross alpha $\alpha_{g,0}$ is annual alpha \textbf{after baseline execution delay and before the modeled annual costs}. An ideal frictionless backtest alpha cannot be used interchangeably without adjusting the baseline.
-
-\begin{equation}
-\alpha_{\rm net}(s)=\alpha_{g,0}H(s)-\frac{C_0s^\gamma}{100},\qquad IR_{\rm net}(s)=\frac{\alpha_{\rm net}(s)}{\sigma_{TE}}.
-\end{equation}
-
-Alpha and tracking error above are in percentage points; $C_0$ is total annual portfolio cost in basis points. At $s=1$, net alpha is baseline gross alpha minus $C_0/100$. At the default $\gamma=0$, annual cost \textbf{in portfolio bp} stays constant; dollar costs grow with AUM. This is a simplifying assumption, not an empirical impact law. Positive $\gamma$ is an optional cost stress, not a fitted impact exponent. Participation sensitivities hold the selected cost rule fixed and do not claim to estimate the cost of changing execution speed.
-
-Legacy saved strategies receive an initial annual-cost input from:
-
-\begin{equation}
-C_0=2\left(\frac{T_{\rm one\ way,\%}}{100}\right)\frac{\sum_b Q_bc_b}{\sum_b Q_b}.
-\end{equation}
-
-Here $c_b$ is cost in bp per traded dollar and one-way turnover is defined so that buys plus sells / AUM is twice one-way turnover. This conversion avoids ambiguity about the two traded sides. After conversion, annual cost is an explicit input; changing bucket data or trade CSVs does not automatically recalibrate it. Include each modeled cost once. Tracking error remains fixed.
-
-\section{Monte Carlo simulation}
-
-Monte Carlo is the default calculation mode, with \textbf{2,000 samples} and \textbf{random seed 2026}. Both are editable sidebar parameters and are saved with the strategy. Samples mean independently resampled books, not individual trades. Deterministic mode remains an optional reference.
-
-For an actual trade CSV with $N$ rows, sample $N$ complete $(q_i,V_i)$ pairs with replacement, uniformly by order. Preserve each sampled order's notional and order/ADV ratio, then normalize its notional weight. This preserves the observed relationship between size and liquidity within each pair.
-
-For aggregate buckets, use $N=\operatorname{round}(\sum_b n_b)$ proxy orders per book and sample bucket membership with probabilities $P_b=n_b/\sum_j n_j$. A proxy order in bucket $b$ has notional $\bar q_b=Q_b/n_b$ and the editable representative ratio $x_b$. Thus a book's sampled bucket counts $m_{rb}$ generate notional weights:
-
-\begin{equation}
- (m_{r1},\ldots,m_{rB})\sim\operatorname{Multinomial}(N;P_1,\ldots,P_B),\qquad w_{rb}=\frac{m_{rb}\bar q_b}{\sum_j m_{rj}\bar q_j}.
-\end{equation}
-
-A bucket with positive count requires positive traded value, and conversely. Buckets with both zero are permitted. This aggregate bootstrap varies trade composition conditional on representative order sizes; it does not reconstruct the unknown within-bucket size/ADV distribution or draw fresh universe ADV values. Individual books need not exactly match observed bucket shares or total dollars. Annual cost and baseline gross alpha remain fixed scenario inputs.
-
-For each book $r$, calculate $G_r(s)$, normalize $H_r(s)=G_r(s)/G_r(1)$ and apply the net-alpha and IR equations. Reuse the same sampled book at every AUM checkpoint. Default curves, diagnostics and scenario tables show simulation means. The mean multiplier is:
-
-\begin{equation}
-\bar H(s)=\frac{1}{M}\sum_{r=1}^{M}\frac{G_r(s)}{G_r(1)}.
-\end{equation}
-
-Average these normalized book results; do not replace this with a ratio of mean captures. Each book has $H_r(1)=1$, so the baseline relative-capture and net-alpha bands collapse by construction. Absolute baseline capture can vary, but baseline-alpha uncertainty is not simulated.
-
-Charts and CSV exports report pointwise 5th and 95th percentiles for relative capture, net alpha and net IR. These are \textbf{conditional trade-resampling ranges}, not full confidence intervals for future alpha or simultaneous curve bands. Forecast uncertainty, half-life/cost parameter uncertainty, within-bucket structure and liquidity-regime changes are excluded. More samples reduce Monte Carlo numerical error; they do not remove those uncertainties or mechanically tighten the underlying resampling distribution. IID order resampling also omits rebalance clustering; timestamped trades would be needed for a block bootstrap.
-
-Capacity thresholds use the mean simulated curve from USD 500m, solved by bisection within the chart horizon. Current AUM remains the order-size and alpha calibration anchor. No probability of capacity breach is inferred from this mean crossing. Sensitivity comparisons use the same seed and book count for each alternative, with each book renormalized to that alternative's baseline. Seed, sample count, mode and percentile columns are included in the capacity export.
-
-\section{Capacity and diagnostics}
-
-Capacity is the first AUM \textbf{at or above USD 500m} where net IR reaches the selected minimum. Crossings use a numerical bisection through the selected chart horizon. If the USD 500m starting point is already below the threshold, the crossing lies at or below the calculation floor. A crossing below current AUM is permitted; current AUM is the calibration anchor, not the lower search bound. If no crossing occurs in range, the dashboard reports greater than the horizon. Scenarios at $\times$1, $\times$1.5, $\times$2, $\times$2.5 and $\times$3 remain available even if outside the plotted range.
-
-Average execution time is notional-weighted. Multi-day notional is $\sum_i w_i\mathbf{1}[D_i>1]$; count-weighted multi-day share uses order counts. Retained alpha means net alpha divided by baseline gross alpha and is undefined when baseline gross alpha is zero.
-
-\section{Sensitivity and independent backtest comparison}
-
-Half-life and participation scenarios are recalculated and normalized to their own baseline. They describe alternative assumptions, not statistical confidence intervals. Bucket representative points and costs should also be stressed where data is uncertain.
-
-The historical optimised-backtest comparison remains separate: $IR(A)=a-bA^\gamma$. Its observations determine the fitted parameters, and sidebar edits change only the active scenario. Its parameters do not enter the execution model. Its zero-IR and minimum-IR AUM values are solved analytically; both models search or report threshold crossings from the USD 500m calculation floor. Historical backtest observations below this floor remain available for fitting, but predictions and chart ranges start at the floor.
-
-The model is a reduced-form alpha-capture proxy. It omits forecast uncertainty, market drift, adverse selection, changing liquidity, concurrent-order constraints, signal updates and changes in portfolio risk. Historical trading analysis is needed to estimate signal half-life and baseline annual costs.
-\section{Model Calibration and the AUM grid}
-The execution equations above apply to the Execution delay model. Calibrated alpha decay is an alternative capacity model; it replaces those equations when selected.
-All scenario curves, exports and capacity searches start at USD 500m. Scenario tables include that starting point alongside current-AUM multiples. Current AUM remains the calibration anchor, so relative capture can exceed 100\% below it. Normalization and the baseline's collapsed resampling interval remain at current AUM, not automatically at USD 500m.
-
-The \textbf{ADV bucket sampler} displays one exact seeded bootstrap book and compares its baseline count/notional shares with observed shares. It uses representative proxy orders for aggregate buckets or complete q/ADV pairs for actual trades. Bucket labels describe baseline membership, not migration. Its selected AUM defaults to current AUM, matching the supplied bucket observations.
-
-The \textbf{Alpha decay} demo accepts three calibration triples and plots AUM to multi-day order share, multi-day order share to net IR, and the composed AUM to IR curve. Curvatures are fitted automatically. In the combined empirical model, edits immediately update the main curve and Summary. Apply buttons remain available in isolated comparison modes. Inputs \& strategy persists the selection and triples.
-
-The \textbf{Transfer coefficient decay} demo accepts three (TC, AUM, annual alpha) triples and fits the two linked relationships. It can apply the calibration to Capacity Lab. ADV sampler controls do not change these triples, and the separate alpha-decay curve is not multiplied into this model.
-
-\section{Three-point calibration isolating alpha decay}
-Calibration triples $(A_i,b_i,I_i)$ contain AUM in USD billions, count-weighted percentage of parent orders taking strictly more than one day (percentage points), and net IR. Defaults are $(0.5,0,0.60)$, $(3,2,0.57)$ and $(6,10,0.50)$. The starting AUM and share are fixed at USD 0.5bn and zero. Subsequent AUM and shares increase strictly; shares lie within 0--100\%. IR decreases strictly and AUM inputs use USD 0.5bn increments.
-\begin{align*}
-k &= \frac{\log(b_2/b_1)}{\log((A_2-A_0)/(A_1-A_0))}, &
-b(A) &= b_1\left(\frac{A-A_0}{A_1-A_0}\right)^k,\\
-\eta &= \frac{\log((I_0-I_2)/(I_0-I_1))}{\log(b_2/b_1)}, &
-I(b) &= I_0-(I_0-I_1)\left(\frac{b}{b_1}\right)^\eta.
-\end{align*}
-The defaults imply $k=2.041249$ and $\eta=0.748070$, reproducing all three points exactly. They are user-supplied scenario assumptions, not historical parameter estimates. Multi-day share is a congestion proxy; it does not distinguish two-day and ten-day orders.
-
-Initial net IR includes fixed other effects. Only alpha decay varies; tracking error is fixed. Net alpha in percent equals calibrated net IR times tracking error in percent. Execution half-life, participation, baseline gross alpha, cost drag and cost elasticity do not enter this mode. No additional cost subtraction, decay multiplier or TC multiplier is applied. The empirical backtest comparison remains separate.
-
-Values beyond the last calibration AUM (default USD 6bn) are labelled extrapolation. The model stops when the multi-day percentage reaches 100\%, at
+\subsection{How the pillars combine}
+Start with the alpha-decay IR, multiply by TC-alpha retention, and deduct \textbf{only the increase in impact costs above USD 0.5bn}:
 \[
-A_{100}=A_0+(A_1-A_0)(100/b_1)^{1/k}.
+\boxed{IR(A)=I_{\alpha}(A)\,H_{TC}(A)-\Delta C_{IR}(A).}
 \]
-Charts and scenario tables respect this limit. Capacity crossings use the analytical inverse of the composed central curve, within the active horizon.
+Here $I_\alpha$ is the calibrated alpha-decay IR, $H_{TC}$ is the TC-alpha retention factor and $\Delta C_{IR}$ is incremental annual impact cost expressed in IR units. The initial net-IR point already includes baseline costs, so the full baseline cost is not deducted again.
 
-In Monte Carlo mode, each AUM uses $K\sim\operatorname{Binomial}(N,b(A)/100)$, with $N$ equal to the observed parent-order count (CSV rows or rounded aggregate count). Apply $I(100K/N)$ to each draw and report pointwise 5th--95th percentiles for IR and net alpha. Sample count and seed are configurable; defaults remain 2,000 and 2026. The centre curve remains the exact calibration, not the mean of the nonlinear simulated outcomes.
+With the default points, IR before incremental impact costs is $0.57\times0.60=0.342$ at USD 3bn and $0.50\times0.30=0.150$ at USD 6bn. Net IR at USD 0.5bn remains exactly 0.60. Annual net alpha in percent equals net IR multiplied by tracking error in percent.
 
-This is synthetic independent-order congestion-count uncertainty, distinct from the ADV-book bootstrap. It excludes uncertainty in the three calibration points and dependence between orders. The ranges are conditional pointwise intervals, not simultaneous confidence bands. They collapse at the zero-congestion anchor. More draws improve numerical precision without removing model uncertainty.
+\subsection{Reading the results}
+\textbf{Empirical IR curve} shows net IR and net alpha across AUM. \textbf{Summary} compares empirical and backtest capacity indications, and separates the empirical decline into alpha-decay, TC and incremental-impact contributions.
 
-Model selection and triples are saved with a strategy. Strategies without an explicit selection default to the combined empirical model.
+Capacity is the first AUM from USD 0.5bn where the central curve reaches the selected threshold. A threshold not reached within the displayed range does not imply unlimited capacity. Projections beyond calibration points are labelled extrapolation. The combined domain stops when either retained-alpha factor first reaches zero, or at an earlier pillar-domain limit.
 
-\section{Three-point transfer-coefficient calibration}
-Input order is $(T_i,A_i,a_i)$: absolute TC in percent, AUM in USD billions and annual net alpha in percent. Other effects remain fixed. Default triples are $(60,0.5,1.0)$, $(40,3,0.6)$ and $(25,6,0.3)$. AUM starts at USD 0.5bn and increases in USD 0.5bn increments; TC decreases strictly within 0--100\% and alpha decreases strictly.
-\begin{align*}
-k_T &= \frac{\log((T_0-T_2)/(T_0-T_1))}{\log((A_2-A_0)/(A_1-A_0))},\\
-T(A) &= T_0-(T_0-T_1)\left(\frac{A-A_0}{A_1-A_0}\right)^{k_T},\\
-\eta_T &= \frac{\log((a_0-a_2)/(a_0-a_1))}{\log((T_0-T_2)/(T_0-T_1))},\\
-a(T) &= a_0-(a_0-a_1)\left(\frac{T_0-T}{T_0-T_1}\right)^{\eta_T}.
-\end{align*}
-These curves reproduce all three estimated triples exactly. Defaults imply nonlinear AUM-to-TC decay but $\eta_T=1$, a linear TC-to-alpha link:
+The default is \textbf{Deterministic}: a central curve without intervals. Select \textbf{Monte Carlo} for conditional 5th--95th percentile ranges. Tables display at most two decimals; calculations, saved values and CSV exports preserve full precision.
+
+\newpage
+\appendix
+\section{Simulation assumptions and calculation notes}
+\subsection{What Monte Carlo samples}
+A sample is an alternative trading book and congestion outcome, not a draw of an individual trade's alpha forecast. Default simulation settings are 2,000 samples and seed 2026; the observed parent-order count determines the size of each book.
+
+\begin{itemize}
+\item \textbf{Bucket data: multinomial counts.} Bucket selection probabilities are observed trade-count shares. Each proxy order uses its bucket's representative order/ADV and average notional. The current sampler does not generate a continuous distribution within each bucket.
+\item \textbf{Actual trades: empirical bootstrap.} Observed orders are sampled uniformly with replacement, retaining complete order-notional and ADV pairs. Equal selection probability does not establish equal alpha contribution.
+\item \textbf{Congestion: binomial counts.} Independently of cost-book sampling, the number of multi-day trades follows a binomial distribution with the observed book size and the calibrated multi-day probability. Its sampled percentage is mapped into IR; simulated alpha retention is floored at zero.
+\end{itemize}
+
+The same cost book is reused at every AUM and compared with its own USD 0.5bn baseline. TC retention and calibration parameters remain fixed. More samples improve numerical stability without increasing the orders in each book or resolving uncertainty in the assumptions. The seed makes the simulations reproducible.
+
+\subsection{Interpretation and limitations}
+For alpha-decay purposes, orders are exchangeable: the model has no trade-specific alpha forecasts or delay sensitivities. This is a count-based approximation, not an explicit allocation of equal alpha dollars to every trade. Cost aggregation remains notional-weighted.
+
+Congestion-count draws and cost composition are independent in the simulation. In reality, difficult-to-execute trades may carry more or less alpha. The ranges exclude this dependence, calibration uncertainty, clustered orders and changes in market liquidity. They are conditional pointwise ranges, not simultaneous confidence bands or guarantees of future performance. The centre curve uses the calibrated congestion share and mean bootstrap impact, not the mean of the nonlinear final outcomes. Ranges collapse at the USD 0.5bn anchor.
+
+The Fundamental Law of Active Management motivates separating forecast skill, independent breadth and implementation efficiency. This dashboard does not estimate skill or independent breadth, and its TC scenario is not an estimated forecast-to-position correlation.
+
+\subsection{Units and fitted relationships}
+AUM is in USD billions. Order/ADV is a fraction internally and a percentage in the interface. Annual alpha and tracking error use percentage points. If $C(A)$ is annual portfolio cost in bp and $TE$ is tracking error in percent, incremental cost in IR units is
 \[
-a(T)=0.02T-0.20.
+\Delta C_{IR}(A)=\frac{C(A)-C(0.5)}{100\,TE}.
 \]
-Here TC and annual alpha use percentage-point units. The fixed offset comes from the supplied net-alpha estimates; this is not a pure proportional FLAM gross-alpha curve through zero. It does not estimate IC or independent breadth. Editing the triples can produce a nonlinear TC-to-alpha relationship.
-
-Net IR equals annual net alpha divided by fixed tracking error, using percent units for both return quantities. No extra costs, execution capture or separate alpha-decay multiplier are applied. Projections beyond the final calibration AUM (default USD 6bn) are labelled extrapolation and stop at zero TC:
-\[
-A_{T=0}=A_0+(A_1-A_0)\left(\frac{T_0}{T_0-T_1}\right)^{1/k_T}.
-\]
-Capacity crossings use the analytical inverse of the central curve, within the active chart horizon. TC calibration is deterministic: three estimated triples identify no TC uncertainty distribution, so no simulation band is inferred. Execution and alpha-decay models retain their separate Monte Carlo options. Model selection, triples and fitted curvatures are exported; strategy saving persists the selection and triples.
-
-\section{Dashboard organisation}
-Summary remains first, followed by Empirical IR curve, Backtest IR curve, Model Calibration, Inputs \& strategy, and Methodology. Inputs \& strategy combines editable baseline inputs and the saving form. The Methodology tab contains only a PDF download of this document. The LaTeX source remains separately editable.
-
-\section{Impact-cost estimation in ADV bucket sampler}
-The sampler restores the legacy impact curve
-\[
-c(x)=a+b x^\gamma,
-\]
-where $x$ is total parent-order/ADV as a fraction and $c(x)$ is positive basis points per traded dollar. Estimated bucket costs are the fitting target and are stored as positive cost magnitudes. The fit uses active baseline representative ratios and bucket costs, weighting each bucket equally, with $a,b\geq0$ and $0.05\leq\gamma\leq3$. It minimizes squared residuals. Default estimated data recover approximately $a=0$, $b=28.0279$ and $\gamma=0.385843$.
-
-Observed aggregate impact uses actual traded-value weights, not trade-count weights or rounded shares. Default estimated impact is about 8.6932 bp per traded dollar. Fitting and aggregation weights serve different purposes. The preview follows changes in current AUM until the user selects a custom scenario. Scenario preview values scale order sizes without re-anchoring the input buckets; the empirical net-IR anchor remains USD 0.5bn. The fit updates automatically when baseline bucket inputs change. There are no per-bucket sliders, manual impact overrides or execution hyperparameters in the sampler. Controls are selected AUM, sample count, random seed and one-way annual turnover. Book selection and diagnostic plots are in an expandable inspection section. Fitted parameters and exports are in a separate details section.
-
-For each sampled book, scale order ratios with AUM and evaluate
-\[
-\bar c_r(A)=\sum_i w_{ri}c\left(x_i(A_0)\frac{A}{A_0}\right),\qquad
-\text{impact USD}_r=\frac{\sum_i q_{ri}(A)c(x_i(A))}{10{,}000}.
-\]
-Annual portfolio drag in bp is $2\tau\bar c_r(A)$, with $\tau$ the one-way annual turnover fraction. Default 13.9\% turnover gives a multiplier of 0.278. This conversion is separate from pricing the displayed sampled orders; their summed notional need not represent one full year's turnover.
-
-The AUM chart reuses the sampler's exact seeded bootstrap books, showing mean annual drag and pointwise 5th--95th percentile order-composition ranges. Impact parameters, ADV and turnover stay fixed. These ranges exclude fitting uncertainty. Predictions outside the observed representative order/ADV range are extrapolations. The curve assumes no migration, impact cap or execution-participation cost adjustment.
-
-Sampled-order costs and the cost curve have separate CSV exports containing active parameters, turnover, fitting target, seed and book count. These estimates supply the impact pillar of the combined empirical model. Legacy execution costs and isolated alpha/TC comparisons remain separate.
-
-The sampler also displays a grouped vertical bar chart of trade frequencies at current AUM, twice current AUM and three times current AUM. It reuses one exact seeded book, scales baseline order/ADV by 1, 2 and 3, and reclassifies the orders. Each stage preserves total parent-order count. Bucket intervals include the lower boundary and exclude the upper boundary, with an explicit overflow category at or above the highest upper boundary. These scenarios use Capacity Lab current AUM independently of Sampler AUM and the impact chart horizon. Representative ratios determine aggregate-bucket moves; actual-trade mode retains complete order ratios. ADV buckets are on the x-axis and percentage frequency is on the y-axis. The count-weighted scenario distributions are available as a CSV export.
-
-\section{Combined three-pillar empirical IR curve}
-The selected combination multiplies retained-alpha factors. Let $I_\alpha(A)$ be the alpha-decay calibration and $I_0=I_\alpha(0.5)$ its initial net IR. Let $a_{TC}(A)$ be the TC calibration's annual alpha, with $a_{TC,0}=a_{TC}(0.5)$. Define
-\begin{align*}
-H_\alpha(A)&=\frac{I_\alpha(A)}{I_0},&H_{TC}(A)&=\frac{a_{TC}(A)}{a_{TC,0}},\\
-C(A)&=2\tau\bar c(A),&IR_{\mathrm{emp}}(A)&=I_0H_\alpha(A)H_{TC}(A)-\frac{C(A)-C(0.5)}{100\sigma_{TE}}.
-\end{align*}
-Here $C$ is annual portfolio impact drag in bp, $\tau$ is one-way annual turnover as a fraction and $\sigma_{TE}$ is tracking error in percentage points. Net alpha in percent is $IR_{\mathrm{emp}}\sigma_{TE}$. The initial net IR includes baseline costs, so only the incremental impact cost above USD 0.5bn is deducted. The TC alpha calibration supplies a relative factor, not a second absolute alpha anchor. Legacy gross alpha, half-life, cost elasticity and explicit annual-cost controls do not enter this calculation.
-
-With default triples, IR before incremental impact costs is $0.57\times0.60=0.342$ at USD 3bn and $0.50\times0.30=0.150$ at USD 6bn. At USD 0.5bn net IR is exactly 0.60. Current AUM anchors observed order sizes used for impact estimation; the net-IR anchor remains USD 0.5bn.
-
-Model Calibration edits immediately update Empirical IR curve and Summary. Sampler count, seed and turnover drive the combined model. Saving persists the active triples, observations and simulation settings. Exports contain retentions, incremental costs, fitted impact parameters, model identity and percentiles. Summary retains the separate backtest comparison and reconciles all three losses:
-\[
-IR_{\mathrm{emp}}=I_0-(I_0-I_\alpha)-I_\alpha(1-H_{TC})-\frac{C(A)-C(0.5)}{100\sigma_{TE}}.
-\]
-The three deductions are alpha-decay loss, TC loss and incremental impact loss, respectively.
-
-The domain starts at USD 0.5bn and stops when either retained-alpha factor first reaches zero, or at an earlier isolated-model domain limit. Factors remain nonnegative; combined net IR can become negative through incremental impact costs. Beyond either final calibration AUM, predictions are labelled extrapolation. Capacity crossings use bisection on the central combined curve, bounded by this domain and the chart horizon.
-
-In Monte Carlo mode, the same seeded order book prices $C_r(A)$ and its own baseline $C_r(0.5)$. Each simulated outcome subtracts its own baseline cost. Independent binomial congestion counts condition on the fitted multi-day share, with their IR conversion floored at zero retention. TC retention and fitted parameters remain fixed. Pointwise 5th--95th percentiles combine these two conditional sources of uncertainty.
-
-The centre curve evaluates the calibrated multi-day share and mean bootstrap impact, rather than averaging the nonlinear final outcomes. At USD 0.5bn the ranges collapse to the anchor. Bands exclude parameter uncertainty and dependence between congestion counts and impact composition, and are not simultaneous curve confidence bands. Deterministic mode uses observed order weights and disables the combined bands. Sampler book inspection remains stochastic.
-
-\section{Display precision and optional intervals}
-The empirical dashboard defaults to Deterministic mode: the calibrated central curve is displayed without confidence intervals and uses observed order weights. Select Monte Carlo in Capacity Lab to add the conditional 5th--95th percentile intervals described above. Simulation count and seed are set in ADV bucket sampler. The selected mode is saved with the strategy; explicitly saved Monte Carlo settings are preserved when reloaded. Sampler book inspection remains stochastic in either mode.
-
-Numeric tables display at most two decimal places; integer counts may omit decimals. Order/ADV ratios and notional weights are displayed as percentages so that small fractions remain readable. Editable bucket ratio columns also use percent units and are converted to fractions internally. Calculations, stored values and CSV exports retain full precision.
-
-\section{What Monte Carlo samples and the alpha assumption}
-Monte Carlo samples are alternative trading books and congestion outcomes. The implementation does not draw an individual alpha forecast for each trade, or assume a normal distribution of trade alpha. The user-supplied alpha-decay curve converts the simulated multi-day trade percentage into portfolio IR.
-
-\textbf{Alpha sensitivity.} The decay calibration treats parent orders as exchangeable for congestion purposes: a small order and a large order count equally toward the percentage taking more than one day. It does not identify which orders carry more predictive alpha or have greater delay sensitivity. This is a count-based approximation that ignores trade-level alpha heterogeneity, rather than an explicit allocation of equal alpha dollars to every order. Impact costs are aggregated separately using traded-notional weights.
-
-\textbf{Bucket-input sampling.} A simulated book has $N=\operatorname{round}(\sum_b n_b)$ orders. Its bucket counts follow
-\[
-(m_1,\ldots,m_B)\sim\operatorname{Multinomial}(N;P_1,\ldots,P_B),
-\qquad P_b=\frac{n_b}{\sum_j n_j}.
-\]
-Each proxy order uses its bucket's representative order/ADV and average notional $Q_b/n_b$. Randomness changes the counts and composition; the current sampler does not draw a continuous order/ADV value within each bucket.
-
-\textbf{Actual-trade sampling.} With a trade CSV, the empirical bootstrap draws $N$ observed orders uniformly with replacement, retaining each sampled order's complete $(q,ADV)$ pair. Equal selection probability does not establish equal alpha contribution.
-
-\textbf{Congestion sampling.} Independently of the cost-book draw, at each AUM the combined model generates
-\[
-K(A)\sim\operatorname{Binomial}(N,p(A)),\qquad
-p(A)=\frac{\text{calibrated multi-day percentage at }A}{100}.
-\]
-The sampled percentage $100K(A)/N$ enters the calibrated alpha-to-IR function. TC retention and all calibration parameters remain fixed. The binomial assumption uses independent order indicators with the same conditional probability $p(A)$.
-
-The model therefore omits dependence between sampled impact-cost composition and alpha loss: difficult-to-execute trades may carry unusually high or low alpha in reality. The conditional percentile bands do not capture this dependence or uncertainty in the calibration assumptions. Increasing the sample count improves numerical precision without adding trades to each book or resolving these omitted sources of uncertainty. The seed makes the draws reproducible.
 \end{document}
