@@ -36,7 +36,7 @@ DEFAULT_PARAMETERS: dict[str, Any] = {
     "annual_cost_bps": annual_cost_from_buckets(BUCKETS, 13.9),
     "cost_elasticity": 0.0, "minimum_ir": 0.4, "retained_threshold": 80.0,
     "regulatory_aum": None, "competition_aum": None,
-    "calculation_mode": "Deterministic", "mc_samples": 2000, "mc_seed": 2026,
+    "calculation_mode": "Monte Carlo", "mc_samples": 2000, "mc_seed": 2026,
 }
 
 
@@ -194,7 +194,7 @@ def save_strategy(
         "ir_points": ir_records,
         "ir_points_source": "saved",
         "trades": trade_records,
-        "methodology": "three-pillar-universe-adv-v2" if parameters["model_kind"] == "Three-pillar empirical" else "three-point-tc-v1" if parameters["model_kind"] == "Calibrated transfer coefficient" else "three-point-alpha-decay-v1" if parameters["model_kind"] == "Calibrated alpha decay" else MODEL_VERSION,
+        "methodology": "three-pillar-capacity-mc-v3" if parameters["model_kind"] == "Three-pillar empirical" else "three-point-tc-v1" if parameters["model_kind"] == "Calibrated transfer coefficient" else "three-point-alpha-decay-v1" if parameters["model_kind"] == "Calibrated alpha decay" else MODEL_VERSION,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")

@@ -46,6 +46,31 @@ class UniverseMonteCarloEngine(MonteCarloEngine):
         book.insert(2, "Order notional (USD)", self.order_notional_usd * aum_bn / self.p.aum0)
         return book
 
+    def monthly_book(self,index,aum_bn):
+        """Partition the inspected annual book into 12 monthly rebalances.
+
+        Conditional random allocation preserves the exact annual stock counts.
+        Monthly counts differ by at most one; fixed ADV and equal tickets mean
+        this calendar allocation does not change annual impact or capacity.
+        """
+        annual=self.sampled_book(index,aum_bn)
+        remaining=annual['Sampled orders'].to_numpy(int).copy()
+        counts=np.full(12,self.book_size//12,dtype=int)
+        counts[:self.book_size%12]+=1
+        rng=np.random.default_rng(np.random.SeedSequence([self.seed,2,int(index)]))
+        records=[]
+        for month,n in enumerate(counts,1):
+            if n==0:continue
+            selected=remaining.copy() if n==remaining.sum() else rng.multivariate_hypergeometric(remaining,int(n))
+            remaining-=selected
+            for stock in np.flatnonzero(selected):
+                records.append({'Month':month,'Synthetic stock':int(stock+1),
+                                'Stock ADV (USD/day)':self.universe_adv[stock],
+                                'Parent orders':int(selected[stock]),
+                                'Order notional (USD)':annual['Order notional (USD)'].iloc[stock],
+                                'Traded notional (USD)':selected[stock]*annual['Order notional (USD)'].iloc[stock]})
+        return pd.DataFrame(records)
+
 
 def create_liquidity_engine(scenario, buckets=None, trades=None, mode="Monte Carlo",
                             samples=2000, seed=2026, adv_points=None,

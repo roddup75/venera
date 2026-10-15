@@ -39,11 +39,11 @@ For a legacy strategy without an explicit annual-cost input, initialization uses
 `2 * (one_way_turnover_pct / 100) * notional_weighted_cost_bps`, where bucket weights
 come from `valueUsdMillion`. This is portfolio annual cost in bp, not per-trade bp.
 The migrated cost is editable and remains independent of subsequent bucket edits.
-Saving the combined model writes the `three-pillar-universe-adv-v2` method identifier and selected trade tape.
+Saving the combined model writes the `three-pillar-capacity-mc-v3` method identifier and selected trade tape.
 Saving in universe mode clears the saved active tape for that case. Backtest observations
 are refitted on load; transient sidebar backtest parameter overrides are not saved.
 
-The default sampler uses the user-confirmed locally saved ADV percentiles in `data/universe-adv-data.json`, interpolated in log USD at 300 midpoint stock ranks. These are synthetic stock ADVs, not an observed 300-name tape. Each annual book selects stocks uniformly with replacement for 971 equal-notional orders. Ticket size is `2 * turnover_fraction * AUM_USD / annual_orders`, so every book reconciles exactly to annual turnover. The annual horizon is four quarters; no quarterly clustering or trade dates are simulated.
+The default sampler uses the user-confirmed locally saved ADV percentiles in `data/universe-adv-data.json`, interpolated in log USD at 300 midpoint stock ranks. These are synthetic stock ADVs, not an observed 300-name tape. Each annual book selects stocks uniformly with replacement for 971 equal-notional orders across 12 monthly rebalances. Ticket size is `2 * turnover_fraction * AUM_USD / annual_orders`, so every book reconciles exactly to annual turnover. An inspected annual book can be exported as 12 monthly rebalances, preserving annual counts and notional. Calendar grouping does not change annual costs with fixed ADV and independent selections; no seasonal liquidity or rebalance clustering is simulated.
 
 Historical ADV buckets calibrate the impact function and provide comparison frequencies; they are not the sampling distribution. Uniform selection and equal tickets need not reproduce those historical frequencies. CSV mode retains actual q/ADV pairs and their notionals. Current AUM anchors those observations; scenario previews scale tickets with fixed ADV. The empirical net-IR anchor remains $0.5B.
 
@@ -59,10 +59,7 @@ persistence, plus Streamlit script execution and interactive recalculation.
 
 See [METHODOLOGY.md](METHODOLOGY.md) for the complete methodology.
 
-Monte Carlo is optional: set **Sampler Monte Carlo samples** (default 2,000) and
-**Random seed** (default 2026) in the sidebar. In execution mode, each sample is a resampled book
-with the annual order-count input (or observed row count in CSV mode). Charts show means and conditional 5th–95th
-percentile ranges; deterministic mode is available for comparison. These ranges
+Monte Carlo is the combined model default: set **Sampler Monte Carlo samples** (default 2,000) and **Sampler random seed** (default 2026) in Model Calibration. Each annual book uses the annual order-count input (or observed CSV row count). The combined curve and cost demo show conditional 20th–80th percentile ranges; deterministic mode remains available. Legacy execution and isolated comparisons retain their separately labelled 5th–95th ranges. These ranges
 exclude parameter and liquidity-regime uncertainty. The Fundamental Law of Active
 Management relationship is documented in the Methodology tab and LaTeX source;
 baseline gross alpha anchors its combined skill/breadth/construction effect.
@@ -97,8 +94,14 @@ The ADV sampler shows a grouped vertical bar chart of trade frequencies at curre
 
 ### Combined empirical model
 
-The initial net IR is the alpha-decay first point (default 0.60 at $0.5B). Normalize the TC alpha curve by its first annual-alpha value, multiply it by the alpha-decay IR curve, then subtract `(annual_impact_bp(A) - annual_impact_bp(0.5)) / (100 * tracking_error_pct)`. The TC curve is used as a relative factor. No second baseline alpha or full baseline cost is added. Summary shows all three losses and the historical backtest comparison. Monte Carlo combines stock-sampled or CSV-resampled incremental costs with independent binomial congestion counts; TC and fitted parameters remain fixed. The domain ends when either retained-alpha factor reaches zero. The central curve is calibrated, with conditional pointwise percentile bands.
+The initial net IR is the alpha-decay first point (default 0.60 at $0.5B). Normalize the TC alpha curve by its first annual-alpha value, multiply it by the alpha-decay IR curve, then subtract `(annual_impact_bp(A) - annual_impact_bp(0.5)) / (100 * tracking_error_pct)`. The TC curve is used as a relative factor. No second baseline alpha or full baseline cost is added. Summary shows all three losses and the historical backtest comparison. Monte Carlo varies stock-sampled or CSV-resampled incremental costs only; alpha-decay, congestion percentages, TC and all fitted parameters remain fixed. The domain ends when either retained-alpha factor reaches zero. The central curve is calibrated, with conditional pointwise percentile bands.
 
-Tables display at most two decimals, with order/ADV ratios shown as percentages. Model calculations, saved values and CSV exports preserve full precision. Select Deterministic (default) or Monte Carlo in Capacity Lab to hide or show the empirical curve's conditional intervals.
+Tables display at most two decimals, with order/ADV ratios shown as percentages. Model calculations, saved values and CSV exports preserve full precision. Select Monte Carlo (default) or Deterministic in Capacity Lab to hide or show the empirical curve's conditional intervals.
 
 Sampler AUM defaults to current AUM. Universe ticket size follows AUM, annual order count and turnover. It follows changes in current AUM until a custom preview scenario is selected. Scenario previews scale order sizes while keeping stock ADV fixed. The separate empirical net-IR anchor remains $0.5B.
+
+## Capacity uncertainty: final output
+
+Monte Carlo is the default for the combined model. Simulate one complete IR curve per annual book, reusing it across AUM and against its own $500m cost baseline. Display pointwise P20/P80 IR and net-alpha bands. Separately solve each path's first AUM at minimum IR by bisection, without relying on the plot grid. Summary reports capacity P20, median, P80 and the percentage crossing within the horizon, plus a histogram and CSV export. The P20–P80 capacity range is the central 60% of conditional simulation outcomes, not a crossing of the pointwise IR envelope.
+
+Keep unreached paths as right-censored outcomes beyond the horizon/model domain. Percentiles use the empirical inverse CDF over all draws, including those outcomes; beyond-horizon percentiles display as lower bounds. The histogram includes reached crossings only, and the export retains all draws. Only stock selection varies; alpha-decay and TC curves remain fixed, producing complete nonincreasing IR paths as costs rise and retention falls. Ranges exclude calibration, liquidity-regime and forecast uncertainty. Legacy isolated/execution comparisons retain their separately labelled 5th–95th ranges.

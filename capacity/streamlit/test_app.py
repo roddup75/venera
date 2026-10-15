@@ -57,12 +57,15 @@ class AppTests(unittest.TestCase):
         net=next(d.value for d in app.dataframe if 'Scenario' in d.value.columns and 'Net IR' in d.value.columns)['Net IR']
         self.assertTrue(any(abs(v-round(v,2))>1e-5 for v in net))
 
-    def test_empirical_intervals_are_optional_and_off_by_default(self):
+    def test_empirical_capacity_intervals_are_default_and_optional(self):
         import json
         app=self.app()
         def plot(title):
             return next(json.loads(c.proto.spec) for c in app.get('plotly_chart') if json.loads(c.proto.spec).get('layout',{}).get('title',{}).get('text')==title)
-        self.assertEqual(next(s.value for s in app.selectbox if s.label=='Calculation mode'),'Deterministic')
+        self.assertEqual(next(s.value for s in app.selectbox if s.label=='Calculation mode'),'Monte Carlo')
+        self.assertEqual(len(plot('Net information ratio')['data']),3)
+        self.assertTrue(any(m.label=='Capacity P20' for m in app.metric))
+        next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
         self.assertEqual(len(plot('Net information ratio')['data']),1)
         self.assertEqual(len(plot('Net alpha')['data']),1)
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Monte Carlo').run()
@@ -72,6 +75,21 @@ class AppTests(unittest.TestCase):
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
         self.assertEqual(len(plot('Net information ratio')['data']),1)
         self.assertEqual(len(app.exception),0,str(app.exception))
+
+    def test_capacity_interval_summary_and_censoring_follow_threshold(self):
+        app=self.app()
+        def metric(label):return next(m.value for m in app.metric if m.label==label)
+        self.assertEqual(metric('Threshold reached within horizon'),'100.00%')
+        p20=float(metric('Capacity P20').strip('$').replace('bn',''))
+        p80=float(metric('Capacity P80').strip('$').replace('bn',''))
+        self.assertLess(p20,p80)
+        next(n for n in app.number_input if n.label=='Minimum net IR').set_value(0.).run()
+        next(n for n in app.number_input if n.label=='Chart horizon ($bn)').set_value(3.4).run()
+        self.assertEqual(len(app.exception),0,str(app.exception))
+        self.assertEqual(metric('Threshold reached within horizon'),'0.00%')
+        self.assertTrue(metric('Capacity P80').startswith('>'))
+        next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
+        self.assertFalse(any(m.label=='Capacity P20' for m in app.metric))
 
     def test_demo_controls_and_500m_grid(self):
         app=self.app()
@@ -192,7 +210,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(metric('Orders in sampled book'),'971')
         before=float(metric('Sampled weighted impact').split()[0])
         before_ir=float(metric('Current net IR'))
-        next(n for n in app.number_input if n.label=='Annual parent orders (four quarters)').set_value(1942).run()
+        next(n for n in app.number_input if n.label=='Annual parent orders (12 monthly rebalances)').set_value(1942).run()
         self.assertEqual(len(app.exception),0,str(app.exception))
         self.assertEqual(metric('Orders in sampled book'),'1,942')
         self.assertLess(float(metric('Sampled weighted impact').split()[0]),before)
@@ -250,7 +268,7 @@ class AppTests(unittest.TestCase):
     def test_monte_carlo_default_and_editable_samples(self):
         app=self.app()
         mode=next(s for s in app.selectbox if s.label == 'Calculation mode')
-        self.assertEqual(mode.value,'Deterministic')
+        self.assertEqual(mode.value,'Monte Carlo')
         samples=next(n for n in app.number_input if n.label == 'Sampler Monte Carlo samples')
         self.assertEqual(samples.value,2000)
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Monte Carlo').run()
@@ -297,7 +315,7 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(params['turnover'],30.)
                 self.assertEqual(params['mc_samples'],100)
                 self.assertEqual(params['mc_seed'],42)
-                self.assertEqual(saved['methodology'],'three-pillar-universe-adv-v2')
+                self.assertEqual(saved['methodology'],'three-pillar-capacity-mc-v3')
                 self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),before)
 
     def test_strategy_creator_save_and_reload(self):

@@ -62,10 +62,10 @@ def impact_curve(sampler, maximum, a, b, gamma, turnover_pct):
     grid=np.unique(np.r_[np.linspace(.5,maximum,81),sampler.p.aum0] )
     grid=grid[grid<=maximum]
     draws=sampler.impact_samples(grid,a,b,gamma)
-    low,high=np.quantile(draws,[.05,.95],axis=0)
+    low,high=np.quantile(draws,[.2,.8],axis=0)
     factor=2*turnover_pct/100
     return pd.DataFrame({'AUM':grid,'Mean impact (bp/traded dollar)':draws.mean(axis=0),
-                         'Impact P05 (bp/traded dollar)':low,'Impact P95 (bp/traded dollar)':high,
+                         'Impact P20 (bp/traded dollar)':low,'Impact P80 (bp/traded dollar)':high,
                          'Annual drag (portfolio bp)':factor*draws.mean(axis=0),
-                         'Annual drag P05 (portfolio bp)':factor*low,
-                         'Annual drag P95 (portfolio bp)':factor*high})
+                         'Annual drag P20 (portfolio bp)':factor*low,
+                         'Annual drag P80 (portfolio bp)':factor*high})

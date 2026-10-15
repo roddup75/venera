@@ -61,7 +61,7 @@ class UniverseSamplerTests(unittest.TestCase):
         model=EmpiricalIRModel(Scenario(),DEFAULT_POINTS,DEFAULT_TC_POINTS,BUCKETS,
                                mode='Monte Carlo',samples=100,turnover=0)
         self.assertAlmostEqual(model.metric(3)['Net IR'],.342)
-        self.assertEqual(model.curve(6).iloc[0]['Net IR P05'],.6)
+        self.assertEqual(model.curve(6).iloc[0]['Net IR P20'],.6)
 
     def test_csv_retains_actual_pairs_and_book_size(self):
         tape=pd.DataFrame({'q':[10.,20.,30.],'adv':[100.,100.,200.]})
@@ -69,3 +69,16 @@ class UniverseSamplerTests(unittest.TestCase):
         self.assertEqual(engine.book_size,3)
         np.testing.assert_allclose(engine.x,tape.q/tape.adv)
         self.assertEqual(engine.source,'trade-csv')
+
+    def test_monthly_rebalance_partition_preserves_annual_book(self):
+        engine=self.engine(seed=42)
+        annual=engine.sampled_book(0,3.4)
+        monthly=engine.monthly_book(0,3.4)
+        pd.testing.assert_frame_equal(monthly,engine.monthly_book(0,3.4))
+        counts=monthly.groupby('Month')['Parent orders'].sum()
+        self.assertEqual(len(counts),12)
+        self.assertEqual(counts.sum(),971)
+        self.assertEqual(counts.max()-counts.min(),1)
+        stock_counts=monthly.groupby('Synthetic stock')['Parent orders'].sum().reindex(range(1,301),fill_value=0)
+        np.testing.assert_array_equal(stock_counts,annual['Sampled orders'])
+        self.assertAlmostEqual(monthly['Traded notional (USD)'].sum(),annual['Sampled notional (USD)'].sum(),places=5)

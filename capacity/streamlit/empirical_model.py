@@ -54,7 +54,7 @@ class EmpiricalIRModel:
                 'Extrapolated':bool(aum>min(self.alpha.points[-1,0],self.tc.points[-1,1]))}
 
     def capacity(self,minimum_ir,maximum):
-        maximum=min(maximum,self.maximum)
+        maximum=self._validate_horizon(maximum)
         if self.metric(.5)['Net IR']<=minimum_ir:return .5
         if self.metric(maximum)['Net IR']>minimum_ir:return None
         lo,hi=.5,maximum
@@ -64,25 +64,99 @@ class EmpiricalIRModel:
             else:hi=mid
         return hi
 
+    def _validate_horizon(self, maximum):
+        if not np.isfinite(maximum) or maximum < .5:
+            raise ValueError('Capacity horizon must be finite and at least $500m.')
+        return min(float(maximum),self.maximum)
+
+    def _tc_retention(self, aums):
+        tc,a,alpha=self.tc.points.T
+        value=np.maximum(0.,tc[0]-(tc[0]-tc[1])*((np.asarray(aums)-a[0])/(a[1]-a[0]))**self.tc.k)
+        return np.maximum(0.,self.tc.alpha_from_tc(value)/self.initial_tc_alpha)
+
+    def _congestion_probability(self, aums):
+        a,b,_=self.alpha.points.T
+        return np.clip(b[1]/100*((np.asarray(aums)-a[0])/(a[1]-a[0]))**self.alpha.k,0.,1.)
+
+    def _impact_coefficients(self):
+        if self.mode!='Monte Carlo':
+            raise ValueError('Select Monte Carlo to simulate capacity intervals.')
+        if not hasattr(self,'_simulation_cost_coefficients'):
+            # The intercept cancels against each book's own $500m baseline.
+            costs=self.orders.impact_samples([self.p.aum0],0.,self.fit.b,self.fit.gamma)[:,0]
+            self._simulation_cost_coefficients=2*self.turnover/100*costs/(100*self.p.tracking_error)
+        return self._simulation_cost_coefficients
+
+    def _paired_ir(self,aums,coefficients):
+        # Alpha-decay and TC are calibrated functions, identical for every draw.
+        decay=np.maximum(0.,self.alpha.ir_from_percentage(100*self._congestion_probability(aums)))
+        delta=coefficients*((np.asarray(aums)/self.p.aum0)**self.fit.gamma-(.5/self.p.aum0)**self.fit.gamma)
+        return decay*self._tc_retention(aums)-delta
+
+    def simulated_curves(self,aums):
+        """Return complete, paired, nonincreasing IR paths (samples x AUM).
+
+        Each book is shared across AUM, independent of the plotting grid.
+        Only stock selection (or actual-order resampling) varies.
+        """
+        aums=np.asarray(aums,float)
+        if aums.ndim!=1 or not len(aums) or not np.isfinite(aums).all() or np.any(aums<.5) or np.any(aums>self.maximum+1e-10):
+            raise ValueError('Simulation AUM must lie within the empirical model domain.')
+        coefficients=self._impact_coefficients()
+        decay=np.maximum(0.,self.alpha.ir_from_percentage(100*self._congestion_probability(aums)))
+        base_ir=decay*self._tc_retention(aums)
+        cost_scale=(aums/self.p.aum0)**self.fit.gamma-(.5/self.p.aum0)**self.fit.gamma
+        return base_ir[None,:]-coefficients[:,None]*cost_scale[None,:]
+
+    def capacity_samples(self,minimum_ir,maximum):
+        """Solve the first threshold crossing separately for every simulated path.
+
+        Unreached thresholds are right-censored at the chosen horizon, never
+        dropped or replaced by an invented crossing at the horizon.
+        """
+        maximum=self._validate_horizon(maximum)
+        if not np.isfinite(minimum_ir):
+            raise ValueError('Minimum IR must be finite.')
+        coefficients=self._impact_coefficients()
+        if minimum_ir>=self.initial_ir:
+            crossing=np.full(self.samples,.5)
+        else:
+            hi=np.full(self.samples,maximum);lo=np.full(self.samples,.5)
+            reached=self._paired_ir(hi,coefficients)<=minimum_ir
+            for _ in range(45):
+                mid=(lo+hi)/2
+                above=self._paired_ir(mid,coefficients)>minimum_ir
+                lo=np.where(above,mid,lo);hi=np.where(above,hi,mid)
+            crossing=np.where(reached,hi,np.nan)
+        reached=np.isfinite(crossing)
+        return pd.DataFrame({'Simulation':np.arange(1,self.samples+1),
+                             'AUM at minimum IR (USD bn)':crossing,
+                             'Threshold reached':reached,
+                             'Capacity lower bound (USD bn)':np.where(reached,crossing,maximum),
+                             'Minimum net IR':minimum_ir,'Search horizon (USD bn)':maximum})
+
+    @staticmethod
+    def capacity_interval(draws):
+        """Empirical inverse-CDF percentiles retain all right-censored draws."""
+        if draws.empty:
+            raise ValueError('Capacity samples cannot be empty.')
+        ordered=np.sort(draws['AUM at minimum IR (USD bn)'].fillna(np.inf).to_numpy(float))
+        result={}
+        for name,q in [('P20',.2),('P50',.5),('P80',.8)]:
+            value=ordered[max(0,int(np.ceil(q*len(ordered)))-1)]
+            result[name]=float(value) if np.isfinite(value) else None
+        result['Threshold reached (%)']=100*float(draws['Threshold reached'].mean())
+        result['Censored simulations']=int((~draws['Threshold reached']).sum())
+        return result
+
     def curve(self,maximum,uncertainty=True):
-        maximum=min(maximum,self.maximum)
+        maximum=self._validate_horizon(maximum)
         points=np.r_[self.alpha.points[:,0],self.tc.points[:,1],self.p.aum0]
         grid=np.unique(np.r_[np.linspace(.5,maximum,121),points[(points>=.5)&(points<=maximum)]])
         frame=pd.DataFrame([self.metric(float(a)) for a in grid])
         if uncertainty and self.mode=='Monte Carlo':
-            # The same bootstrap book prices all AUMs, including the $500m cost anchor.
-            cost_draws=self.orders.impact_samples(np.r_[.5,grid],self.fit.a,self.fit.b,self.fit.gamma)
-            delta=2*self.turnover/100*(cost_draws[:,1:]-cost_draws[:,[0]])
-            # Independent congestion-count uncertainty conditional on the fitted share.
-            congestion_rng=np.random.default_rng(np.random.SeedSequence([self.seed,1]))
-            low=[];high=[]
-            for j,(_,row) in enumerate(frame.iterrows()):
-                counts=congestion_rng.binomial(self.book_size,row['Multi-day count (%)']/100,size=self.samples)
-                decay=np.maximum(0.,self.alpha.ir_from_percentage(100*counts/self.book_size))
-                tc_retention=row['TC alpha retention (%)']/100
-                draws=decay*tc_retention-delta[:,j]/(100*self.p.tracking_error)
-                bounds=np.quantile(draws,[.05,.95]);low.append(bounds[0]);high.append(bounds[1])
-            frame['Net IR P05']=low;frame['Net IR P95']=high
-            frame['Net alpha P05 (%)']=frame['Net IR P05']*self.p.tracking_error
-            frame['Net alpha P95 (%)']=frame['Net IR P95']*self.p.tracking_error
+            low,high=np.quantile(self.simulated_curves(grid),[.2,.8],axis=0)
+            frame['Net IR P20']=low;frame['Net IR P80']=high
+            frame['Net alpha P20 (%)']=low*self.p.tracking_error
+            frame['Net alpha P80 (%)']=high*self.p.tracking_error
         return frame

@@ -24,7 +24,7 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved['adv_points'],source['adv_points'])
         self.assertEqual(saved['ir_points'][1]['ir'],.31)
         self.assertEqual(saved['trades'], trades.to_dict('records'))
-        self.assertEqual(saved['methodology'],'three-pillar-universe-adv-v2')
+        self.assertEqual(saved['methodology'],'three-pillar-capacity-mc-v3')
         engine=ExecutionEngine(Scenario(aum0=8), trades=pd.DataFrame(saved['trades']))
         self.assertEqual(engine.metric(8)['Alpha capture (%)'],100)
 
@@ -41,7 +41,7 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved['parameters']['gross_alpha'],.58)
         self.assertEqual(saved['parameters']['holdings'],40)
         self.assertEqual(saved['parameters']['engine_name'],'Execution delay')
-        self.assertEqual(saved['parameters']['calculation_mode'],'Deterministic')
+        self.assertEqual(saved['parameters']['calculation_mode'],'Monte Carlo')
         self.assertEqual(saved['parameters']['mc_samples'],2000)
         expected=annual_cost_from_buckets(pd.DataFrame(source['buckets']),13.9)
         self.assertAlmostEqual(saved['parameters']['annual_cost_bps'],expected)

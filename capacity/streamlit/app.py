@@ -230,13 +230,14 @@ with st.sidebar:
         calculation_mode = "Deterministic"
         st.caption("TC calibration is deterministic; no TC uncertainty distribution has been specified.")
     else:
-        if is_combined and not st.session_state.get("confidence_interval_ui_migrated"):
-            if main_key+"calculation_mode" in st.session_state:
-                st.session_state[main_key+"calculation_mode"]="Deterministic"
-            st.session_state["confidence_interval_ui_migrated"]=True
+        if is_combined and not st.session_state.get("capacity_interval_ui_migrated"):
+            st.session_state[main_key+"calculation_mode"]="Monte Carlo"
+            st.session_state["capacity_interval_ui_migrated"]=True
         calculation_mode = st.selectbox("Calculation mode", ["Deterministic", "Monte Carlo"], index=0 if saved["calculation_mode"] == "Deterministic" else 1, key=main_key+"calculation_mode",
-                                        help="Deterministic: calibrated curve without confidence intervals. Monte Carlo: add conditional 5–95% intervals using the sampler's count and seed.")
+                                        help="Deterministic: calibrated curve without confidence intervals. Monte Carlo: show 20–80% IR bands and the capacity interval at minimum IR.")
+    uncertainty_source="Stock selections only"
     if is_combined:
+        st.caption("Only stock selections (or CSV order resampling) vary. Alpha-decay and TC curves stay fixed.")
         mc_samples=int(st.session_state.get(demo_key+"samples",saved["mc_samples"]))
         mc_seed=int(st.session_state.get(demo_key+"seed",saved["mc_seed"]))
         st.caption("Simulation count and seed are set in Model Calibration → ADV bucket sampler.")
@@ -285,8 +286,8 @@ with inputs:
     st.caption("The universe sampler selects stocks uniformly with replacement and gives every order equal absolute notional. Historical buckets provide impact-cost calibration and comparison data; they do not determine simulated bucket frequencies. Trade CSV remains available for actual orders.")
     universe_controls=st.columns(2)
     universe_size=int(universe_controls[0].number_input("Stocks in universe",1,10000,int(saved.get("universe_size",300)),1,key=main_key+"universe_size",disabled=source=="Trade CSV"))
-    annual_trades=int(universe_controls[1].number_input("Annual parent orders (four quarters)",1,1000000,int(saved.get("annual_trades",971)),1,key=main_key+"annual_trades",disabled=source=="Trade CSV"))
-    st.caption(f"{annual_trades:,} annual orders ≈ {annual_trades/12:.2f} per month. Quarterly timing is not simulated; stock selections are independent.")
+    annual_trades=int(universe_controls[1].number_input("Annual parent orders (12 monthly rebalances)",1,1000000,int(saved.get("annual_trades",971)),1,key=main_key+"annual_trades",disabled=source=="Trade CSV"))
+    st.caption(f"{annual_trades:,} annual orders ≈ {annual_trades/12:.2f} per month. The strategy rebalances monthly; the annual simulation pools 12 monthly rebalances. Fixed ADV and independent selections mean calendar grouping does not change annual results.")
     with st.expander("Universe ADV percentile inputs"):
         active_adv_points=st.data_editor(pd.DataFrame(selected_strategy.get("adv_points") or ADV_POINTS.to_dict("records")),
             hide_index=True,num_rows="dynamic",width="stretch",key=main_key+"adv_points",
@@ -435,8 +436,8 @@ with execution:
             st.plotly_chart(style_figure(fig),width="stretch")
             cost_curve=impact_curve(sampler,max_aum,impact_a,impact_b,impact_gamma,turnover)
             fig=go.Figure()
-            fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag P95 (portfolio bp)'],mode="lines",line=dict(width=0),showlegend=False)
-            fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag P05 (portfolio bp)'],mode="lines",line=dict(width=0),fill="tonexty",fillcolor="rgba(66,199,165,0.18)",name="5–95% stock-selection range" if active_trades is None else "5–95% order-resampling range")
+            fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag P80 (portfolio bp)'],mode="lines",line=dict(width=0),showlegend=False)
+            fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag P20 (portfolio bp)'],mode="lines",line=dict(width=0),fill="tonexty",fillcolor="rgba(66,199,165,0.18)",name="20–80% stock-selection range" if active_trades is None else "20–80% order-resampling range")
             fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag (portfolio bp)'],mode="lines",name="Mean annual impact drag",line=dict(color=GREEN))
             fig.update_layout(title="Estimated annual impact cost across AUM",xaxis_title="AUM (USD bn)",yaxis_title="Annual impact drag (portfolio bp)")
             fig.update_xaxes(range=[MIN_AUM,max_aum] if max_aum>MIN_AUM else [MIN_AUM,MIN_AUM+.01])
@@ -478,6 +479,14 @@ with execution:
             st.plotly_chart(style_figure(fig),width="stretch")
             display_table(shares,hide_index=True,width="stretch")
             display_table(book,hide_index=True,width="stretch")
+            if active_trades is None:
+                monthly=sampler.monthly_book(int(sample_id)-1,float(sample_aum))
+                monthly_summary=monthly.groupby('Month',as_index=False).agg(
+                    **{'Parent orders':('Parent orders','sum'),'Traded notional (USD)':('Traded notional (USD)','sum')})
+                st.caption("Monthly rebalance allocation of this same annual book. Order counts sum to the annual input; fixed ADV and equal tickets leave annual costs unchanged.")
+                display_table(monthly_summary,hide_index=True,width="stretch")
+                st.download_button("Export monthly sampled book CSV",monthly.assign(seed=int(demo_seed),
+                    book_number=int(sample_id)).to_csv(index=False),"monthly_sampled_book.csv","text/csv")
             st.download_button("Export sampled book CSV",book.assign(aum_usd_bn=sample_aum,book_number=int(sample_id),seed=int(demo_seed)).to_csv(index=False),"demo_sampled_book.csv","text/csv")
 
     with alpha_tab:
@@ -628,6 +637,15 @@ scenario_metrics = [engine.metric(float(a)) for a in scenario_aums]
 base = engine.metric(aum0)
 capacity_minimum_crossing = engine.capacity(minimum_ir, max_aum)
 capacity_zero_crossing = engine.capacity(0, max_aum)
+capacity_draws=None
+capacity_uncertainty=None
+if is_combined and calculation_mode=="Monte Carlo":
+    capacity_draws=engine.capacity_samples(minimum_ir,max_aum)
+    capacity_uncertainty=engine.capacity_interval(capacity_draws)
+
+def percentile_display(value):
+    return f"${value:.2f}bn" if value is not None else f"> ${max_aum:.2f}bn"
+
 if strategy_ir_fit is not None and backtest_a is not None:
     active_backtest_a, active_backtest_b, active_backtest_gamma = backtest_a, backtest_b, backtest_gamma
     current_backtest_ir = backtest_a - backtest_b * aum0 ** backtest_gamma
@@ -640,11 +658,11 @@ else:
 with overview:
     if is_combined:
         if calculation_mode=="Deterministic":
-            st.caption("Deterministic empirical curve — no confidence intervals. Select Monte Carlo in Capacity Lab to show conditional 5–95% intervals.")
+            st.caption("Deterministic empirical curve — no confidence intervals. Select Monte Carlo in Capacity Lab to show 20–80% curve bands and the capacity interval.")
         st.caption("Three calibrated pillars: alpha retention × TC-alpha retention, less incremental estimated impact drag. Net IR is anchored to the alpha calibration's first point at $0.5bn. Costs already embedded in that net anchor are not subtracted again.")
         st.caption(f"Impact fit uses estimated bucket costs; one-way turnover {turnover:g}%. Beyond ${last_calibration_aum:g}bn is extrapolation. The domain ends when either retention factor reaches zero.")
         if calculation_mode=="Monte Carlo":
-            st.caption(f"{mc_samples:,} draws · {engine.book_size:,} orders per book · seed {mc_seed}. Pointwise 5–95% conditional ranges combine stock-sampled or CSV-resampled incremental costs with independent binomial congestion counts. TC and fitted parameters stay fixed; the centre is the calibrated curve, not the nonlinear simulation mean.")
+            st.caption(f"{mc_samples:,} draws · {engine.book_size:,} orders per book · seed {mc_seed}. 20–80% pointwise IR bands use {uncertainty_source.lower()}. Every simulation is one complete curve with the same book across AUM. Alpha-decay, TC and fitted parameters stay fixed; the central IR curve equals the mean simulated IR.")
     elif is_tc:
         st.caption(f"Three-point TC calibration · AUM curvature {engine.k:.5f} · TC-to-alpha curvature {engine.gamma:.5f}. Annual alpha is interpreted as net alpha with other effects fixed. No extra costs or alpha-decay multiplier are applied.")
         st.caption(f"Beyond ${last_calibration_aum:g}bn is extrapolation. Deterministic calibration; no uncertainty band is inferred from three estimated points.")
@@ -680,12 +698,19 @@ with overview:
                                   (["Net alpha (%)"], "Net alpha", "Net alpha (% per year)")]:
         plot = data.melt(id_vars="AUM", value_vars=columns, var_name="Series", value_name="Value")
         fig = px.line(plot, x="AUM", y="Value", labels={"Value": ylabel}, color="Series", title=title, color_discrete_sequence=PALETTE)
-        bounds = {"Net IR": ("Net IR P05", "Net IR P95"), "Net alpha (%)": ("Net alpha P05 (%)", "Net alpha P95 (%)")}
+        suffixes=("P20","P80") if is_combined else ("P05","P95")
+        bounds = {"Net IR": tuple(f"Net IR {p}" for p in suffixes),
+                  "Net alpha (%)": tuple(f"Net alpha {p} (%)" for p in suffixes)}
         band_key = columns[0]
         if calculation_mode == "Monte Carlo" and band_key in bounds:
             low, high = bounds[band_key]
             fig.add_scatter(x=data["AUM"], y=data[high], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip")
-            fig.add_scatter(x=data["AUM"], y=data[low], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(66,199,165,0.18)", name="5–95% conditional range" if calibrated else "5–95% resampling range", hoverinfo="skip")
+            fig.add_scatter(x=data["AUM"], y=data[low], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(66,199,165,0.18)", name="20–80% conditional range" if is_combined else "5–95% conditional range" if calibrated else "5–95% resampling range", hoverinfo="skip")
+        if columns == ["Net IR"] and capacity_uncertainty is not None:
+            lo=capacity_uncertainty['P20'];hi=capacity_uncertainty['P80']
+            if lo is not None:
+                fig.add_vrect(x0=lo,x1=hi if hi is not None else max_aum,
+                    fillcolor=BLUE,opacity=.12,line_width=0,annotation_text="Capacity P20–P80" if hi is not None else "Capacity P80 beyond horizon")
         if columns == ["Net IR"]:
             fig.add_hline(y=minimum_ir, line_dash="dash", line_color=RUST)
         if calibrated and max_aum > last_calibration_aum:
@@ -719,13 +744,14 @@ with overview:
                              calculation_mode=calculation_mode, mc_samples=mc_samples, mc_seed=mc_seed,
                              parent_order_count=engine.book_size)
     if is_combined:
-        export=data.assign(methodology="three-pillar-universe-adv-v2",model=model_kind,
+        export=data.assign(methodology="three-pillar-capacity-mc-v3",model=model_kind,
                            alpha_points=json.dumps(alpha_points),tc_points=json.dumps(tc_points),
                            tracking_error_pct=tracking_error,baseline_aum_usd_bn=aum0,
                            net_ir_anchor=engine.initial_ir,net_ir_anchor_aum=.5,one_way_turnover_pct=turnover,
                            impact_a=engine.fit.a,impact_b=engine.fit.b,impact_gamma=engine.fit.gamma,
                            order_source=engine.orders.source,universe_size=universe_size,parent_order_count=engine.book_size,
                            adv_percentiles=json.dumps(active_adv_points.to_dict("records")),
+                           uncertainty_source=uncertainty_source,interval_lower_percentile=20,interval_upper_percentile=80,
                            calculation_mode=calculation_mode,mc_samples=int(mc_samples),mc_seed=int(mc_seed))
     if is_tc:
         export = data.assign(methodology="three-point-tc-v1", model=model_kind,
@@ -737,6 +763,30 @@ with overview:
 
 with summary:
     st.subheader("Empirical capacity summary")
+    if capacity_uncertainty is not None:
+        st.subheader("AUM at minimum IR: 20–80% Monte Carlo interval")
+        cells=st.columns(4)
+        cells[0].metric("Capacity P20",percentile_display(capacity_uncertainty['P20']))
+        cells[1].metric("Capacity median (P50)",percentile_display(capacity_uncertainty['P50']))
+        cells[2].metric("Capacity P80",percentile_display(capacity_uncertainty['P80']))
+        cells[3].metric("Threshold reached within horizon",f"{capacity_uncertainty['Threshold reached (%)']:.2f}%")
+        st.caption(f"Minimum net IR {minimum_ir:.2f} · {mc_samples:,} complete simulated curves · {uncertainty_source.lower()}. "
+                   "Solve each curve's first threshold crossing, then take the 20th and 80th percentiles of those AUM values. This is a central 60% conditional simulation interval, not crossings of the pointwise IR band.")
+        reached=capacity_draws.loc[capacity_draws['Threshold reached']]
+        if len(reached):
+            fig=px.histogram(reached,x='AUM at minimum IR (USD bn)',nbins=40,
+                             title='Distribution of AUM at minimum IR',color_discrete_sequence=[GREEN])
+            fig.update_layout(yaxis_title="Simulations",xaxis_title="AUM at minimum IR (USD bn)")
+            for key,color in [('P20',BLUE),('P50',AMBER),('P80',BLUE)]:
+                value=capacity_uncertainty[key]
+                if value is not None:fig.add_vline(x=value,line_color=color,line_dash='dash',annotation_text=key)
+            st.plotly_chart(style_figure(fig),width="stretch")
+        if capacity_uncertainty['Censored simulations']:
+            st.caption(f"{capacity_uncertainty['Censored simulations']:,} simulations did not reach the threshold by ${max_aum:.2f}bn. They remain in percentile calculations as beyond-horizon outcomes; the histogram shows reached crossings only.")
+        st.download_button("Export simulated capacity crossings CSV",capacity_draws.assign(seed=int(mc_seed),
+            uncertainty_source=uncertainty_source).to_csv(index=False),"simulated_capacity_crossings.csv","text/csv")
+    elif is_combined:
+        st.info("Select Monte Carlo to estimate the 20–80% AUM interval at minimum IR.")
     st.write(
         "Side-by-side capacity indications from the active capacity model and the empirical "
         "optimised-backtest curve. Both use the current AUM and minimum IR selected in Capacity Lab."
@@ -763,6 +813,9 @@ with summary:
             "AUM at zero IR": f"${zero_aum:.2f}bn" if np.isfinite(zero_aum) else "Not reached",
         },
     ]).set_index("Model")
+    if capacity_uncertainty is not None:
+        comparison['Capacity P20']= [percentile_display(capacity_uncertainty['P20']),"Not simulated"]
+        comparison['Capacity P80']= [percentile_display(capacity_uncertainty['P80']),"Not simulated"]
     display_table(comparison, width="stretch")
     st.caption(
         f"Empirical curve crossings are solved from USD 500m through the USD {max_aum:g}bn chart horizon. "

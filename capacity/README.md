@@ -41,3 +41,5 @@ streamlit/.venv/bin/python -m unittest discover -s streamlit -p 'test_*.py'
 See [methodology](streamlit/METHODOLOGY.md) and [Streamlit documentation](streamlit/README.md).
 
 Tables display at most two decimals, with order/ADV ratios shown as percentages. Model calculations, saved values and CSV exports preserve full precision. Select Deterministic (default) or Monte Carlo in Capacity Lab to hide or show the empirical curve's conditional intervals.
+
+Monte Carlo is the default for the combined model. Its main uncertainty output is the **20th–80th percentile interval of AUM at minimum IR**, computed from each simulated curve's own first threshold crossing. Summary includes the median, range, crossing distribution and beyond-horizon share. The pointwise IR band is also 20th–80th percentile. Stock selection is the random component; alpha-decay and TC curves stay fixed.
