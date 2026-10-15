@@ -156,6 +156,14 @@ selected_strategy = strategies[selected_strategy_name]
 saved = {**DEFAULT_PARAMETERS, **selected_strategy["parameters"]}
 main_key = f"execution::{selected_strategy_name}::"
 demo_key = main_key+"pillars::"
+def sync_backtest_control(source_key,target_key):
+    st.session_state[target_key]=st.session_state[source_key]
+
+for parameter in ("backtest_sd","backtest_expansion"):
+    sidebar_key=main_key+parameter
+    if sidebar_key not in st.session_state:
+        st.session_state[sidebar_key]=float(st.session_state.get(demo_key+parameter,saved[parameter]))
+
 model_kind="Three-pillar empirical"
 strategy_ir_points = pd.DataFrame(selected_strategy["ir_points"])[IR_COLUMNS]
 try:
@@ -199,7 +207,7 @@ with st.sidebar:
     retained_threshold=float(saved["retained_threshold"])
     st.subheader("Decision threshold")
     minimum_ir=st.number_input("Minimum net IR",0.,10.,float(saved["minimum_ir"]),.05,key=main_key+"minimum_ir")
-    with st.expander("Backtest IR comparison"):
+    with st.expander("Backtest IR curve — advanced parameters"):
         if strategy_ir_fit is None:
             backtest_a = backtest_b = backtest_gamma = None
             st.warning(f"Backtest observations could not be fitted: {strategy_ir_fit_error}")
@@ -208,6 +216,13 @@ with st.sidebar:
             backtest_a = st.number_input("Backtest a", value=float(strategy_ir_fit["a"]), step=.01, format="%.4f", key=main_key+"backtest_a")
             backtest_b = st.number_input("Backtest b", min_value=0.0, value=float(strategy_ir_fit["b"]), step=.005, format="%.5f", key=main_key+"backtest_b")
             backtest_gamma = st.number_input("Backtest γ", .20, 3.0, float(strategy_ir_fit["gamma"]), .05, key=main_key+"backtest_gamma")
+        st.caption("Backtest uncertainty")
+        st.number_input("Backtest IR deviation at current AUM",0.,2.,step=.01,format="%.2f",key=main_key+"backtest_sd",
+            on_change=sync_backtest_control,args=(main_key+"backtest_sd",demo_key+"backtest_sd"),
+            help="Standard deviation in IR units at current AUM. Zero removes uncertainty. Linked to Model Calibration → Backtest uncertainty.")
+        st.slider("Backtest uncertainty expansion rate",0.,3.,step=.1,key=main_key+"backtest_expansion",
+            on_change=sync_backtest_control,args=(main_key+"backtest_expansion",demo_key+"backtest_expansion"),
+            help="Rate 0 keeps width constant; 1 doubles deviation at ×2 AUM; 2 quadruples it. Linked to Model Calibration → Backtest uncertainty.")
     with st.expander("Display markers"):
         regulatory_raw = st.text_input("Implied regulatory AUM ($bn)", value="" if saved["regulatory_aum"] is None else str(saved["regulatory_aum"]), key=main_key+"regulatory_aum")
         competition_raw = st.text_input("Median competition AUM ($bn)", value="" if saved["competition_aum"] is None else str(saved["competition_aum"]), key=main_key+"competition_aum")
@@ -519,8 +534,10 @@ with execution:
         st.write("Calibrate uncertainty around the fitted backtest IR curve. The fitted curve stays the central estimate; the band widens as AUM grows.")
         c1,c2=st.columns(2)
         backtest_sd=c1.number_input("Backtest IR deviation at current AUM",0.,2.,float(saved["backtest_sd"]),.01,format="%.2f",key=demo_key+"backtest_sd",
+            on_change=sync_backtest_control,args=(demo_key+"backtest_sd",main_key+"backtest_sd"),
             help="Standard deviation in IR units, not a percentage. A value of 0.03 gives a Gaussian P20–P80 band of approximately ±0.025 IR at current AUM. Zero removes uncertainty.")
         backtest_expansion=c2.slider("Backtest uncertainty expansion rate",0.,3.,float(saved["backtest_expansion"]),.1,key=demo_key+"backtest_expansion",
+            on_change=sync_backtest_control,args=(demo_key+"backtest_expansion",main_key+"backtest_expansion"),
             help="Deviation scales as (AUM/current AUM)^rate. Rate 0 gives constant width; 1 doubles deviation at ×2 AUM; 2 quadruples it.")
         st.caption(f"At current AUM: deviation {backtest_sd:.2f} IR. At ×2: {backtest_sd*2**backtest_expansion:.2f}; at ×3: {backtest_sd*3**backtest_expansion:.2f}. The P20–P80 range covers the central 60% of the assumed Gaussian distribution.")
         if backtest_a is not None:
@@ -807,7 +824,7 @@ with backtest_ir:
             c1.metric('Backtest capacity P20',backtest_percentile_display(backtest_interval['P20']))
             c2.metric('Backtest capacity median',backtest_percentile_display(backtest_interval['P50']))
             c3.metric('Backtest capacity P80',backtest_percentile_display(backtest_interval['P80']))
-            st.caption(f"Gaussian uncertainty: deviation {backtest_sd:.2f} IR at current AUM; expansion rate {backtest_expansion:.2f}. The band is pointwise P20–P80. Capacity percentiles use {mc_samples:,} correlated full-curve draws, with unreached paths retained beyond the horizon. Adjust in Model Calibration → Backtest uncertainty.")
+            st.caption(f"Gaussian uncertainty: deviation {backtest_sd:.2f} IR at current AUM; expansion rate {backtest_expansion:.2f}. The band is pointwise P20–P80. Capacity percentiles use {mc_samples:,} correlated full-curve draws, with unreached paths retained beyond the horizon. Adjust in Capacity Lab → Backtest IR curve — advanced parameters, or Model Calibration → Backtest uncertainty.")
             st.download_button('Export backtest capacity crossings CSV',backtest_draws.assign(seed=int(mc_seed),backtest_sd=backtest_sd,backtest_expansion=backtest_expansion).to_csv(index=False),'backtest_capacity_crossings.csv','text/csv')
         display_table(backtest_curve if calculation_mode=="Monte Carlo" else backtest_curve[['AUM (USD bn)','Backtest net IR']],hide_index=True,width="stretch")
         st.download_button('Export backtest IR curve CSV',backtest_curve.assign(backtest_sd=backtest_sd,backtest_expansion=backtest_expansion).to_csv(index=False),'backtest_ir_curve.csv','text/csv')

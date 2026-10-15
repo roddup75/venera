@@ -326,9 +326,6 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(selected.value, "Test copy")
                 self.assertEqual(original_load(path)["Test copy"]["parameters"]["engine_name"], "Three-pillar empirical")
 
-if __name__=='__main__':
-    unittest.main()
-
     def test_backtest_uncertainty_calibration_drives_bands_and_summary(self):
         import json
         app=self.app()
@@ -350,3 +347,23 @@ if __name__=='__main__':
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
         self.assertFalse(any(t.get('name')=='Backtest P20–P80' for t in plot()['data']))
         self.assertEqual(len(app.exception),0,str(app.exception))
+
+    def test_backtest_sidebar_controls_sync_with_calibration(self):
+        app=self.app()
+        menu=next(e for e in app.sidebar.expander if e.label=='Backtest IR curve — advanced parameters')
+        sidebar_sd=next(n for n in menu.number_input if n.label=='Backtest IR deviation at current AUM')
+        sidebar_sd.set_value(.07).run()
+        self.assertEqual(len(app.exception),0,str(app.exception))
+        calibration=next(t for t in app.tabs if t.label=='d) Backtest uncertainty')
+        self.assertEqual(calibration.number_input[0].value,.07)
+        calibration.slider[0].set_value(1.8).run()
+        menu=next(e for e in app.sidebar.expander if e.label=='Backtest IR curve — advanced parameters')
+        self.assertEqual(menu.slider[0].value,1.8)
+        calibration=next(t for t in app.tabs if t.label=='d) Backtest uncertainty')
+        calibration.number_input[0].set_value(.12).run()
+        menu=next(e for e in app.sidebar.expander if e.label=='Backtest IR curve — advanced parameters')
+        self.assertEqual(next(n.value for n in menu.number_input if n.label=='Backtest IR deviation at current AUM'),.12)
+        self.assertEqual(len(app.exception),0,str(app.exception))
+
+if __name__=='__main__':
+    unittest.main()
