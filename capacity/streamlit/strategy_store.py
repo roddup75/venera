@@ -14,7 +14,7 @@ from universe_sampler import ADV_POINTS, validate_universe
 from impact_cost import fit_impact_cost
 from transfer_coefficient import TransferCoefficientModel, DEFAULT_TC_POINTS
 from alpha_decay import AlphaDecayModel, DEFAULT_POINTS
-from capacity_model import MIN_AUM, MODEL_VERSION, BUCKETS, annual_cost_from_buckets, validate_buckets, validate_trades
+from capacity_model import MIN_AUM, BUCKETS, annual_cost_from_buckets, validate_buckets, validate_trades
 
 
 STORE_PATH = Path(__file__).resolve().parent / "data" / "strategies.user.json"
@@ -45,7 +45,8 @@ def upgrade_parameters(parameters: dict, buckets: list[dict]) -> dict:
     result = {**DEFAULT_PARAMETERS, **parameters}
     if "annual_cost_bps" not in parameters:
         result["annual_cost_bps"] = annual_cost_from_buckets(pd.DataFrame(buckets), float(parameters.get("turnover", 13.9)))
-    result["engine_name"] = "Execution delay"
+    result["engine_name"] = "Three-pillar empirical"
+    result["model_kind"] = "Three-pillar empirical"
     return result
 
 
@@ -106,17 +107,12 @@ def validate_strategy(
     numeric_parameters = [key for key in DEFAULT_PARAMETERS if key not in ("regulatory_aum", "competition_aum", "calculation_mode", "model_kind", "alpha_points", "tc_points")]
     if any(not isinstance(parameters[key], (int, float)) or not math.isfinite(parameters[key]) for key in numeric_parameters):
         raise ValueError("Model parameters must be finite numbers.")
-    if parameters["model_kind"] not in ("Three-pillar empirical", "Execution delay", "Calibrated alpha decay", "Calibrated transfer coefficient"):
-        raise ValueError("Unknown capacity model.")
-    tc = TransferCoefficientModel(parameters["tc_points"], parameters["tracking_error"])
-    if parameters["model_kind"] == "Calibrated transfer coefficient" and parameters["aum0"] > tc.maximum:
-        raise ValueError("Current AUM exceeds the zero-TC boundary.")
-    alpha = AlphaDecayModel(parameters["alpha_points"], parameters["tracking_error"])
-    if parameters["model_kind"] == "Three-pillar empirical":
-        if parameters["alpha_points"][0][2]<=0 or parameters["tc_points"][0][2]<=0:
-            raise ValueError("Combined retention factors require positive initial IR and TC alpha.")
-    if parameters["model_kind"] == "Calibrated alpha decay" and parameters["aum0"] > alpha.maximum:
-        raise ValueError("Current AUM exceeds the calibrated model's 100% congestion boundary.")
+    if parameters["model_kind"] != "Three-pillar empirical":
+        raise ValueError("The capacity model combines all three calibrated pillars.")
+    tc=TransferCoefficientModel(parameters["tc_points"],parameters["tracking_error"])
+    alpha=AlphaDecayModel(parameters["alpha_points"],parameters["tracking_error"])
+    if parameters["alpha_points"][0][2]<=0 or parameters["tc_points"][0][2]<=0:
+        raise ValueError("Combined retention factors require positive initial calibration values.")
     if parameters["calculation_mode"] not in ("Monte Carlo", "Deterministic"):
         raise ValueError("Unknown calculation mode.")
     for key, lower, upper in (("mc_samples", 2, 20000), ("mc_seed", 0, 2**32-1)):
@@ -143,8 +139,8 @@ def validate_strategy(
         for model in (alpha,tc):
             zero=model.capacity(0,maximum)
             if zero is not None:maximum=min(maximum,zero)
-        if parameters["aum0"]>maximum:
-            raise ValueError("Current AUM exceeds the combined model's nonnegative-retention domain.")
+        if parameters["aum0"]>=maximum:
+            raise ValueError("Current AUM must lie below the combined model's zero-retention boundary.")
         fit_impact_cost(bucket_frame)
     if trades is not None:
         validate_trades(pd.DataFrame(trades))
@@ -194,7 +190,7 @@ def save_strategy(
         "ir_points": ir_records,
         "ir_points_source": "saved",
         "trades": trade_records,
-        "methodology": "three-pillar-capacity-mc-v3" if parameters["model_kind"] == "Three-pillar empirical" else "three-point-tc-v1" if parameters["model_kind"] == "Calibrated transfer coefficient" else "three-point-alpha-decay-v1" if parameters["model_kind"] == "Calibrated alpha decay" else MODEL_VERSION,
+        "methodology": "three-pillar-current-gross-v4",
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")

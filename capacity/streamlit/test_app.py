@@ -31,14 +31,23 @@ class AppTests(unittest.TestCase):
         self.assertIn('c) Transfer coefficient decay',labels)
         self.assertNotIn('Execution & sensitivity',labels)
         self.assertNotIn('Liquidity migration',labels)
-        self.assertEqual(next(s.value for s in app.selectbox if s.label=='Capacity model'),'Three-pillar empirical')
-        next(s for s in app.selectbox if s.label=='Capacity model').set_value('Execution delay').run()
+        self.assertFalse(any(s.label=='Capacity model' for s in app.selectbox))
         initial=float(next(m.value for m in app.metric if m.label=='Current net IR'))
-        field=next(n for n in app.number_input if n.label=='Baseline annual cost drag (bp)')
-        field.set_value(field.value+13).run()
-        self.assertEqual(len(app.exception),0, str(app.exception))
+        def backtest_ir():return next(d.value for d in app.dataframe if 'Approach' in d.value.columns).loc[lambda f:f.Approach=='Backtest IR curve','Current net IR'].iloc[0]
+        before_backtest=backtest_ir()
+        field=next(n for n in app.number_input if n.label=='Baseline gross alpha (%)')
+        self.assertFalse(field.disabled)
+        field.set_value(field.value+.13).run()
+        self.assertEqual(len(app.exception),0,str(app.exception))
         current=float(next(m.value for m in app.metric if m.label=='Current net IR'))
-        self.assertAlmostEqual(initial-current,.1,places=3)
+        self.assertAlmostEqual(current-initial,.1,places=3)
+        self.assertEqual(backtest_ir(),before_backtest)
+        self.assertFalse(any(n.label in ('Baseline annual cost drag (bp)','Signal half-life (trading days)','Cost stress elasticity γ','Minimum retained alpha (%)') for n in app.number_input))
+        summary=next(t for t in app.tabs if t.label=='Summary')
+        self.assertEqual(len(summary.dataframe),2)
+        self.assertEqual(len(summary.get('plotly_chart')),1)
+        self.assertEqual(summary.subheader[-1].value,'Simulation distribution')
+        self.assertFalse(any(h.value=='Three-pillar IR breakdown' for h in summary.subheader))
 
     def test_tables_use_two_decimal_display_without_rounding_inputs(self):
         import json
@@ -119,24 +128,14 @@ class AppTests(unittest.TestCase):
         self.assertEqual(field('Sampler AUM (USD bn)').value,2.)
         self.assertEqual(len(app.exception),0,str(app.exception))
 
-    def test_three_point_calibration_apply_and_cost_isolation(self):
+    def test_alpha_calibration_is_live_and_remains_editable(self):
         app=self.app()
-        next(s for s in app.selectbox if s.label=='Capacity model').set_value('Calibrated alpha decay').run()
         self.assertEqual(next(m.value for m in app.metric if m.label=='Implied AUM curvature'),'2.04125')
-        self.assertEqual(next(m.value for m in app.metric if m.label=='Implied congestion-to-IR curvature'),'0.74807')
         next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.48).run()
-        next(b for b in app.button if b.label=='Apply alpha-decay calibration to Capacity Lab').click().run()
         self.assertEqual(len(app.exception),0,str(app.exception))
-        self.assertEqual(next(s.value for s in app.selectbox if s.label=='Capacity model'),'Calibrated alpha decay')
-        self.assertEqual(next(n.value for n in app.number_input if n.label=='Point 3 net IR'),.48)
-        self.assertTrue(next(n for n in app.number_input if n.label=='Baseline annual cost drag (bp)').disabled)
-        next(n for n in app.number_input if n.label=='Current AUM ($bn)').set_value(6.).run()
-        self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),'0.480')
-        self.assertEqual(len(app.exception),0,str(app.exception))
-        next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
-        self.assertEqual(len(app.exception),0,str(app.exception))
-        next(n for n in app.number_input if n.label=='Point 2 trades >1 day (%)').set_value(0.).run()
-        self.assertTrue(any('increase' in e.value for e in app.error))
+        self.assertFalse(any('Apply alpha' in b.label for b in app.button))
+        next(n for n in app.number_input if n.label=='Demo point 2 trades >1 day (%)').set_value(0.).run()
+        self.assertTrue(any('increase' in e.value for e in app.warning))
 
     def test_simple_impact_controls_and_isolation(self):
         app=self.app()
@@ -157,49 +156,33 @@ class AppTests(unittest.TestCase):
         self.assertEqual(metric('Sampled traded notional'),'USD 0.00m')
         self.assertEqual(len(app.exception),0,str(app.exception))
 
-    def test_tc_calibration_apply_and_te_scaling(self):
+    def test_tc_calibration_and_tracking_error_are_live(self):
         app=self.app()
-        next(s for s in app.selectbox if s.label=='Capacity model').set_value('Calibrated transfer coefficient').run()
         self.assertEqual(next(m.value for m in app.metric if m.label=='Implied TC-to-alpha curvature'),'1.00000')
-        next(b for b in app.button if b.label=='Apply TC calibration to Capacity Lab').click().run()
-        self.assertEqual(len(app.exception),0,str(app.exception))
-        self.assertEqual(next(s.value for s in app.selectbox if s.label=='Capacity model'),'Calibrated transfer coefficient')
-        next(n for n in app.number_input if n.label=='Current AUM ($bn)').set_value(6.).run()
-        self.assertEqual(next(m.value for m in app.metric if m.label=='Current transfer coefficient'),'25.00%')
-        self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),'0.231')
+        def current_alpha():return next(d.value for d in app.dataframe if 'Scenario' in d.value.columns and 'Net alpha (%)' in d.value.columns).loc[lambda f:f.AUM==3.4,'Net alpha (%)'].iloc[0]
+        before=current_alpha()
         next(n for n in app.number_input if n.label=='Tracking error (%)').set_value(1.).run()
-        self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),'0.300')
-        self.assertTrue(next(n for n in app.number_input if n.label=='Baseline annual cost drag (bp)').disabled)
-        self.assertTrue(next(n for n in app.number_input if n.label=='Monte Carlo samples').disabled)
+        self.assertAlmostEqual(current_alpha(),before)
+        self.assertFalse(any('Apply TC' in b.label for b in app.button))
         self.assertEqual(len(app.exception),0,str(app.exception))
-        next(n for n in app.number_input if n.label=='TC point 3 coefficient (%)').set_value(50.).run()
-        self.assertTrue(any('decrease' in e.value for e in app.error))
 
-    def test_empirical_curve_and_summary_follow_all_three_pillars(self):
+    def test_pillars_change_projection_but_preserve_current_gross_anchor(self):
         app=self.app()
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
-        next(n for n in app.number_input if n.label=='Current AUM ($bn)').set_value(3.).run()
-        def breakdown():return next(d.value for d in app.dataframe if 'Starting net IR' in d.value.columns)
-        def ir():
-            aum=next(n.value for n in app.number_input if n.label=='Current AUM ($bn)')
-            return float(breakdown().loc[lambda f:f.AUM==aum,'Net IR'].iloc[0])
-        before=ir()
-        table=breakdown()
-        current=table[table.AUM==3.].iloc[0]
-        self.assertAlmostEqual(current['Net IR'],.342-current['Incremental impact drag (bp)']/130,places=4)
-        self.assertAlmostEqual(before,current['Net IR'],places=3)
-        self.assertEqual(table[table.AUM==.5]['Net IR'].iloc[0],.6)
-        next(n for n in app.number_input if n.label=='Current AUM ($bn)').set_value(3.4).run()
-        before=ir()
+        def table():return next(d.value for d in app.dataframe if 'Starting net IR' in d.value.columns)
+        def future():return float(table().loc[lambda f:f.AUM==6.,'Net IR'].iloc[0])
+        current=next(m.value for m in app.metric if m.label=='Current net IR')
+        before=future()
         next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.48).run()
-        self.assertLess(ir(),before)
-        after_alpha=ir()
+        self.assertLess(future(),before)
+        self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),current)
+        before=future()
         next(n for n in app.number_input if n.label=='Demo TC point 3 annual alpha (%)').set_value(.2).run()
-        self.assertLess(ir(),after_alpha)
-        after_tc=ir()
+        self.assertLess(future(),before)
+        self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),current)
+        before=future()
         next(n for n in app.number_input if n.label=='Impact one-way annual turnover (%)').set_value(30.).run()
-        self.assertLess(ir(),after_tc)
-        self.assertAlmostEqual(ir(),breakdown()[breakdown().AUM==3.4]['Net IR'].iloc[0],places=3)
+        self.assertLess(future(),before)
         self.assertEqual(len(app.exception),0,str(app.exception))
 
     def test_universe_sampler_annual_count_recalculates_cost_and_summary(self):
@@ -281,13 +264,12 @@ class AppTests(unittest.TestCase):
 
     def test_zero_alpha_and_horizon_expansion(self):
         app=self.app()
-        next(s for s in app.selectbox if s.label=='Capacity model').set_value('Execution delay').run()
         next(n for n in app.number_input if n.label=='Baseline gross alpha (%)').set_value(0.).run()
         self.assertEqual(len(app.exception),0,str(app.exception))
-        next(n for n in app.number_input if n.label=='Current AUM ($bn)').set_value(20.).run()
+        next(n for n in app.number_input if n.label=='Current AUM ($bn)').set_value(8.).run()
         self.assertEqual(len(app.exception),0,str(app.exception))
         horizon=next(n for n in app.number_input if n.label=='Chart horizon ($bn)')
-        self.assertGreaterEqual(horizon.value,20)
+        self.assertGreaterEqual(horizon.value,8)
 
     def test_combined_calibration_settings_save_and_reload(self):
         original_save=strategy_store.save_strategy
@@ -303,6 +285,7 @@ class AppTests(unittest.TestCase):
                 next(n for n in app.number_input if n.label=='Impact one-way annual turnover (%)').set_value(30.).run()
                 next(n for n in app.number_input if n.label=='Sampler Monte Carlo samples').set_value(100).run()
                 next(n for n in app.number_input if n.label=='Sampler random seed').set_value(42).run()
+                next(n for n in app.number_input if n.label=='Baseline gross alpha (%)').set_value(.73).run()
                 before=next(m.value for m in app.metric if m.label=='Current net IR')
                 next(n for n in app.text_input if n.label=='Strategy name').set_value('Empirical copy')
                 next(b for b in app.button if b.label=='Save strategy').click().run()
@@ -315,7 +298,8 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(params['turnover'],30.)
                 self.assertEqual(params['mc_samples'],100)
                 self.assertEqual(params['mc_seed'],42)
-                self.assertEqual(saved['methodology'],'three-pillar-capacity-mc-v3')
+                self.assertEqual(params['gross_alpha'],.73)
+                self.assertEqual(saved['methodology'],'three-pillar-current-gross-v4')
                 self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),before)
 
     def test_strategy_creator_save_and_reload(self):
@@ -327,18 +311,17 @@ class AppTests(unittest.TestCase):
                 return original_save(name, parameters, buckets, adv_points, path=path, **kwargs)
             with patch.object(strategy_store, "save_strategy", side_effect=save), patch.object(strategy_store, "load_strategies", side_effect=lambda: original_load(path)):
                 app = self.app()
-                next(s for s in app.selectbox if s.label=='Capacity model').set_value('Calibrated alpha decay').run()
-                next(n for n in app.number_input if n.label=='Point 3 net IR').set_value(.48).run()
+                next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.48).run()
                 next(n for n in app.text_input if n.label == "Strategy name").set_value("Test copy")
                 next(b for b in app.button if b.label == "Save strategy").click().run()
                 self.assertEqual(len(app.exception), 0, str(app.exception))
                 self.assertIn("Test copy", original_load(path))
                 self.assertAlmostEqual(original_load(path)["Test copy"]["buckets"][0]["p"],.005)
-                self.assertEqual(original_load(path)["Test copy"]["parameters"]["model_kind"],"Calibrated alpha decay")
+                self.assertEqual(original_load(path)["Test copy"]["parameters"]["model_kind"],"Three-pillar empirical")
                 self.assertEqual(original_load(path)["Test copy"]["parameters"]["alpha_points"][2][2],.48)
                 selected = next(s for s in app.selectbox if s.label == "Saved strategy")
                 self.assertEqual(selected.value, "Test copy")
-                self.assertEqual(original_load(path)["Test copy"]["parameters"]["engine_name"], "Execution delay")
+                self.assertEqual(original_load(path)["Test copy"]["parameters"]["engine_name"], "Three-pillar empirical")
 
 if __name__=='__main__':
     unittest.main()

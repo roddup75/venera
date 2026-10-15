@@ -24,7 +24,7 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved['adv_points'],source['adv_points'])
         self.assertEqual(saved['ir_points'][1]['ir'],.31)
         self.assertEqual(saved['trades'], trades.to_dict('records'))
-        self.assertEqual(saved['methodology'],'three-pillar-capacity-mc-v3')
+        self.assertEqual(saved['methodology'],'three-pillar-current-gross-v4')
         engine=ExecutionEngine(Scenario(aum0=8), trades=pd.DataFrame(saved['trades']))
         self.assertEqual(engine.metric(8)['Alpha capture (%)'],100)
 
@@ -40,12 +40,24 @@ class StrategyStoreTests(unittest.TestCase):
             self.assertEqual(path.read_text(),original)
         self.assertEqual(saved['parameters']['gross_alpha'],.58)
         self.assertEqual(saved['parameters']['holdings'],40)
-        self.assertEqual(saved['parameters']['engine_name'],'Execution delay')
+        self.assertEqual(saved['parameters']['engine_name'],'Three-pillar empirical')
         self.assertEqual(saved['parameters']['calculation_mode'],'Monte Carlo')
         self.assertEqual(saved['parameters']['mc_samples'],2000)
         expected=annual_cost_from_buckets(pd.DataFrame(source['buckets']),13.9)
         self.assertAlmostEqual(saved['parameters']['annual_cost_bps'],expected)
         self.assertEqual(len(saved['ir_points']),10)
+
+    def test_legacy_model_selection_migrates_to_one_combined_model(self):
+        source=default_strategy()
+        source['parameters']['model_kind']='Calibrated transfer coefficient'
+        source['parameters']['gross_alpha']=.77
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'legacy.json'
+            path.write_text(json.dumps({'Legacy':source}))
+            loaded=load_strategies(path)['Legacy']
+        self.assertEqual(loaded['parameters']['model_kind'],'Three-pillar empirical')
+        self.assertEqual(loaded['parameters']['gross_alpha'],.77)
+        self.assertEqual(loaded['parameters']['tc_points'],source['parameters']['tc_points'])
 
     def test_invalid_inputs_rejected_without_overwriting_store(self):
         source=default_strategy()

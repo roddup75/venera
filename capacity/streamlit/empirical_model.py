@@ -1,4 +1,4 @@
-"""Three calibrated pillars, anchored to net IR at $500m."""
+"""Three calibrated pillars, anchored to gross alpha at current AUM."""
 import numpy as np
 import pandas as pd
 from alpha_decay import AlphaDecayModel
@@ -13,9 +13,9 @@ class EmpiricalIRModel:
         self.p=scenario
         self.alpha=AlphaDecayModel(alpha_points,scenario.tracking_error)
         self.tc=TransferCoefficientModel(tc_points,scenario.tracking_error)
-        self.initial_ir=float(self.alpha.points[0,2])
+        self.shape_initial_ir=float(self.alpha.points[0,2])
         self.initial_tc_alpha=float(self.tc.points[0,2])
-        if self.initial_ir<=0 or self.initial_tc_alpha<=0:
+        if self.shape_initial_ir<=0 or self.initial_tc_alpha<=0:
             raise ValueError('Combined retention factors require positive initial IR and initial TC alpha.')
         if not np.isfinite(turnover) or turnover<0:
             raise ValueError('One-way annual turnover must be finite and nonnegative.')
@@ -29,7 +29,14 @@ class EmpiricalIRModel:
             zero=model.capacity(0,self.maximum)
             if zero is not None:self.maximum=min(self.maximum,zero)
         self.source='three-pillar-empirical'
+        if not .5 <= scenario.aum0 < self.maximum:
+            raise ValueError('Current AUM must lie below the zero-retention boundary to anchor gross alpha.')
+        self.anchor_retention=float(self._retention(scenario.aum0))
+        if self.anchor_retention<=0:
+            raise ValueError('Current AUM requires positive calibrated retention to anchor gross alpha.')
+        self.reference_gross_alpha=scenario.gross_alpha/self.anchor_retention
         self.baseline_cost=self.annual_impact(.5)
+        self.initial_ir=(self.reference_gross_alpha-self.baseline_cost/100)/scenario.tracking_error
 
     def annual_impact(self,aum):
         costs=impact_bps(self.orders.x*aum/self.p.aum0,self.fit.a,self.fit.b,self.fit.gamma)
@@ -43,14 +50,17 @@ class EmpiricalIRModel:
         decay_ir=max(0.,alpha['Net IR'])
         cost=self.annual_impact(aum);incremental=cost-self.baseline_cost
         cost_ir=incremental/(100*self.p.tracking_error)
-        net_ir=decay_ir*retention-cost_ir
+        alpha_retention=decay_ir/self.shape_initial_ir
+        gross=self.reference_gross_alpha*alpha_retention*retention
+        net_ir=(gross-cost/100)/self.p.tracking_error
+        reference_gross_ir=self.reference_gross_alpha/self.p.tracking_error
         return {'AUM':aum,'Multi-day count (%)':alpha['Multi-day count (%)'],
                 'Transfer coefficient (%)':tc['Transfer coefficient (%)'],
-                'Alpha retention (%)':100*decay_ir/self.initial_ir,'TC alpha retention (%)':100*retention,
-                'Alpha-decay loss (IR)':self.initial_ir-decay_ir,
-                'TC loss (IR)':decay_ir*(1-retention),'Impact loss (IR)':cost_ir,
+                'Alpha retention (%)':100*alpha_retention,'TC alpha retention (%)':100*retention,
+                'Alpha-decay loss (IR)':reference_gross_ir*(1-alpha_retention),
+                'TC loss (IR)':reference_gross_ir*alpha_retention*(1-retention),'Impact loss (IR)':cost_ir,
                 'Annual impact drag (bp)':cost,'Incremental impact drag (bp)':incremental,
-                'Net IR':net_ir,'Net alpha (%)':net_ir*self.p.tracking_error,
+                'Gross alpha (%)':gross,'Net IR':net_ir,'Net alpha (%)':net_ir*self.p.tracking_error,
                 'Extrapolated':bool(aum>min(self.alpha.points[-1,0],self.tc.points[-1,1]))}
 
     def capacity(self,minimum_ir,maximum):
@@ -78,20 +88,29 @@ class EmpiricalIRModel:
         a,b,_=self.alpha.points.T
         return np.clip(b[1]/100*((np.asarray(aums)-a[0])/(a[1]-a[0]))**self.alpha.k,0.,1.)
 
+    def _retention(self,aums):
+        alpha=np.maximum(0.,self.alpha.ir_from_percentage(100*self._congestion_probability(aums)))
+        return alpha/self.shape_initial_ir*self._tc_retention(aums)
+
+    def _gross_ir(self,aums):
+        return self.reference_gross_alpha*self._retention(aums)/self.p.tracking_error
+
+    def _impact_intercept_ir(self):
+        return 2*self.turnover/100*self.fit.a/(100*self.p.tracking_error)
+
     def _impact_coefficients(self):
         if self.mode!='Monte Carlo':
             raise ValueError('Select Monte Carlo to simulate capacity intervals.')
         if not hasattr(self,'_simulation_cost_coefficients'):
-            # The intercept cancels against each book's own $500m baseline.
+            # Full annual costs are deducted once from current-AUM gross alpha.
             costs=self.orders.impact_samples([self.p.aum0],0.,self.fit.b,self.fit.gamma)[:,0]
             self._simulation_cost_coefficients=2*self.turnover/100*costs/(100*self.p.tracking_error)
         return self._simulation_cost_coefficients
 
     def _paired_ir(self,aums,coefficients):
-        # Alpha-decay and TC are calibrated functions, identical for every draw.
-        decay=np.maximum(0.,self.alpha.ir_from_percentage(100*self._congestion_probability(aums)))
-        delta=coefficients*((np.asarray(aums)/self.p.aum0)**self.fit.gamma-(.5/self.p.aum0)**self.fit.gamma)
-        return decay*self._tc_retention(aums)-delta
+        # Gross alpha at current AUM is fixed; only trading-book costs vary.
+        cost_ir=self._impact_intercept_ir()+coefficients*(np.asarray(aums)/self.p.aum0)**self.fit.gamma
+        return self._gross_ir(aums)-cost_ir
 
     def simulated_curves(self,aums):
         """Return complete, paired, nonincreasing IR paths (samples x AUM).
@@ -103,10 +122,9 @@ class EmpiricalIRModel:
         if aums.ndim!=1 or not len(aums) or not np.isfinite(aums).all() or np.any(aums<.5) or np.any(aums>self.maximum+1e-10):
             raise ValueError('Simulation AUM must lie within the empirical model domain.')
         coefficients=self._impact_coefficients()
-        decay=np.maximum(0.,self.alpha.ir_from_percentage(100*self._congestion_probability(aums)))
-        base_ir=decay*self._tc_retention(aums)
-        cost_scale=(aums/self.p.aum0)**self.fit.gamma-(.5/self.p.aum0)**self.fit.gamma
-        return base_ir[None,:]-coefficients[:,None]*cost_scale[None,:]
+        base_ir=self._gross_ir(aums)
+        cost_scale=(aums/self.p.aum0)**self.fit.gamma
+        return base_ir[None,:]-self._impact_intercept_ir()-coefficients[:,None]*cost_scale[None,:]
 
     def capacity_samples(self,minimum_ir,maximum):
         """Solve the first threshold crossing separately for every simulated path.
@@ -118,16 +136,14 @@ class EmpiricalIRModel:
         if not np.isfinite(minimum_ir):
             raise ValueError('Minimum IR must be finite.')
         coefficients=self._impact_coefficients()
-        if minimum_ir>=self.initial_ir:
-            crossing=np.full(self.samples,.5)
-        else:
-            hi=np.full(self.samples,maximum);lo=np.full(self.samples,.5)
-            reached=self._paired_ir(hi,coefficients)<=minimum_ir
-            for _ in range(45):
-                mid=(lo+hi)/2
-                above=self._paired_ir(mid,coefficients)>minimum_ir
-                lo=np.where(above,mid,lo);hi=np.where(above,hi,mid)
-            crossing=np.where(reached,hi,np.nan)
+        hi=np.full(self.samples,maximum);lo=np.full(self.samples,.5)
+        already=self._paired_ir(lo,coefficients)<=minimum_ir
+        reached=self._paired_ir(hi,coefficients)<=minimum_ir
+        for _ in range(45):
+            mid=(lo+hi)/2
+            above=self._paired_ir(mid,coefficients)>minimum_ir
+            lo=np.where(above,mid,lo);hi=np.where(above,hi,mid)
+        crossing=np.where(already,.5,np.where(reached,hi,np.nan))
         reached=np.isfinite(crossing)
         return pd.DataFrame({'Simulation':np.arange(1,self.samples+1),
                              'AUM at minimum IR (USD bn)':crossing,

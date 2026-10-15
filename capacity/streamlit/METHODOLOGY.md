@@ -6,7 +6,7 @@ Estimate how net performance changes as assets under management (AUM) grow, and 
 
 The main output is the **20th–80th percentile interval of AUM at minimum net IR** from simulated trading books. The dashboard also reports net IR, annual net alpha, central capacity, and zero-IR AUM. IR is net alpha divided by tracking error. Use consistent return horizons and risk conventions when comparing results.
 
-**Two AUM references have different jobs.** Current AUM anchors historical trading observations. Universe-mode order notionals are derived from AUM, turnover and annual order count. USD 0.5bn starts the calibrated net-IR curve. The sampler preview defaults to current AUM; the empirical curve starts at USD 0.5bn.
+**Current AUM is the strategy anchor.** Baseline gross alpha is editable annual alpha at current AUM, before impact costs. Current AUM also anchors historical orders. USD 0.5bn is the lower calculation boundary; its net IR is implied, not fixed at 0.60.
 
 ## 2. Two complementary approaches
 
@@ -14,7 +14,7 @@ The main output is the **20th–80th percentile interval of AUM at minimum net I
 
 The **Empirical IR curve** combines observed trading and liquidity inputs with three calibrated pillars: impact costs, alpha decay and transfer-coefficient (TC) decay. It asks what happens if orders grow and the chosen execution and implementation assumptions hold.
 
-Trading observations inform impact costs. Alpha-decay and TC points are user estimates, not parameters automatically inferred from trade history. Model Calibration makes them visible and editable.
+Trading observations inform impact costs. Alpha-decay and TC points are user estimates defining relative retention shapes; current-AUM gross alpha sets the combined level. Model Calibration makes them visible and editable.
 
 ### 2.2 Backtest approach
 
@@ -30,7 +30,8 @@ Confirm that the observations in **Inputs & strategy** correspond to current AUM
 
 | Input | Purpose and units |
 |---|---|
-| Current AUM | Size at which observed orders apply; USD billions |
+| Current AUM | Gross-alpha and historical order-size anchor; USD billions |
+| Baseline gross alpha | Annual alpha before impact costs at current AUM; percent |
 | Universe ADV percentiles | Locally saved boundaries interpolated in log USD to approximate 300 individual stocks |
 | Annual parent orders | Default 971 annually across 12 monthly rebalances, about 81 per month |
 | Historical ADV buckets | Participation boundaries, representative ratios and estimated costs for fitting and comparison |
@@ -71,7 +72,7 @@ Provide three **(AUM, % trades taking more than one day, net IR)** points. Two l
 | 3.00 | 2.00% | 0.57 |
 | 6.00 | 10.00% | 0.50 |
 
-These defaults isolate alpha decay with other effects fixed. Multi-day percentage counts orders equally regardless of notional or forecast strength. It does not distinguish two-day from ten-day orders.
+These defaults isolate alpha decay with other effects fixed. Their IR ratios define relative retention, not the absolute level of combined net IR. Multi-day percentage counts orders equally regardless of notional or forecast strength. It does not distinguish two-day from ten-day orders.
 
 #### Transfer coefficient: implementation efficiency declines
 
@@ -95,15 +96,15 @@ Divide calibrated alpha by its initial value to obtain **TC-alpha retention**: 1
 
 ### 3.4 How the pillars combine
 
-Start with alpha-decay IR, multiply by TC-alpha retention, and deduct **only the increase in impact costs above USD 0.5bn**, expressed in IR units:
+Multiply alpha-decay retention and TC-alpha retention into $R(A)$, then normalise at current AUM. With gross alpha $G_{current}$ in percent, annual impact $C(A)$ in bp and tracking error $TE$ in percent:
 
-$$IR(A)=I_\alpha(A)H_{TC}(A)-\Delta C_{IR}(A).$$
+$$IR(A)=\frac{G_{current}R(A)/R(A_{current})-C(A)/100}{TE}.$$
 
-The initial net-IR point already includes baseline costs, so baseline cost is not deducted again. Defaults give IR before incremental costs of 0.57 × 0.60 = 0.342 at USD 3bn and 0.50 × 0.30 = 0.150 at USD 6bn. Net IR at USD 0.5bn remains 0.60. Annual net alpha in percent equals net IR times tracking error in percent.
+The gross-alpha curve passes exactly through the entered gross alpha at current AUM in every simulation. Full impact costs are deducted once. For example, 0.60% gross less 13.00bp cost gives 0.47% net alpha and IR 0.47/1.30 ≈ 0.36. Net alpha equals IR times tracking error. The 0.5bn net IR is implied, not a separate anchor. Current AUM must lie below the zero-retention boundary.
 
 ### 3.5 Reading the results
 
-Empirical IR curve shows net IR and net alpha. Summary compares empirical and backtest capacity and decomposes the empirical decline into alpha-decay, TC and incremental-impact contributions.
+Empirical IR curve shows net IR and net alpha. Summary shows capacity results and comparison tables for both approaches, with the simulation histogram last. The pillar-loss breakdown is in Empirical IR curve.
 
 Capacity is the first AUM from USD 0.5bn where the central curve reaches the chosen threshold. A threshold not reached within range does not imply unlimited capacity. Predictions beyond calibration points are labelled extrapolation. The combined domain stops at the first zero retained-alpha factor or an earlier pillar-domain limit.
 
@@ -127,9 +128,9 @@ The workflow for one simulation is:
 flowchart TD
     S["Annual N orders, approximate 300-stock ADV universe and fixed calibration"] --> B["Cost book: uniformly select stocks with replacement and equal tickets OR bootstrap CSV rows"]
     S --> K["Fixed alpha-decay and TC calibrations"]
-    B --> C["Reuse book across AUM; calculate cost above its own USD 0.5bn baseline"]
+    B --> C["Reuse book across AUM; calculate full annual impact costs"]
     K --> I["Evaluate fixed alpha-decay IR and TC retention at each AUM"]
-    C --> R["IR = alpha-decay IR x fixed TC retention - incremental cost in IR units"]
+    C --> R["IR = current gross alpha x normalised pillar retention / TE - full cost in IR units"]
     I --> R
     R --> C1["Solve the first AUM at minimum IR for this path"]
     C1 --> M["Repeat M = 2,000 times; report capacity P20, median and P80"]
@@ -140,21 +141,19 @@ flowchart TD
 - **Universe ADV: uniform stock selection.** Approximate 300 stock ADVs from saved percentile boundaries. Draw N stocks with replacement, equivalently multinomial stock counts with equal probabilities. Each order has equal notional determined by AUM, turnover and N. Order/ADV determines the bucket; historical bucket shares do not determine selection.
 - **Actual trades: empirical bootstrap.** Observed complete order-notional/ADV pairs are sampled uniformly with replacement. Equal selection probability does not establish equal alpha contribution.
 
-The same cost book is reused across AUM and compared with its own USD 0.5bn baseline. TC and parameters stay fixed. More samples improve numerical stability without increasing orders per book or resolving assumption uncertainty. The seed makes draws reproducible.
+The same cost book is reused across AUM; full impact costs are deducted from gross alpha once. TC and parameters stay fixed. More samples improve numerical stability without increasing orders per book or resolving assumption uncertainty. The seed makes draws reproducible.
 
 ### Interpretation and limitations
 
 Orders are exchangeable for alpha-decay purposes: no trade-specific alpha forecasts or delay sensitivities are modelled. This is a count-based approximation, not an allocation of equal alpha dollars to every trade. Costs remain notional-weighted.
 
-Alpha-decay, congestion percentages, TC, tracking error and fitted cost parameters stay fixed across draws. Difficult trades may carry more or less alpha in reality. Ranges exclude that dependence, parameter uncertainty, clustered orders and changing liquidity. Uniform stock selection, equal tickets and interpolation of stock ADVs are additional assumptions. Historical bucket frequencies need not be reproduced. The IR band is pointwise and the capacity interval comes from per-path threshold crossings. These are conditional ranges, not simultaneous bands or performance guarantees. The centre equals mean simulated IR because alpha-decay and TC are fixed. Ranges collapse at USD 0.5bn.
+Alpha-decay, congestion percentages, TC, tracking error and fitted cost parameters stay fixed across draws. Difficult trades may carry more or less alpha in reality. Ranges exclude that dependence, parameter uncertainty, clustered orders and changing liquidity. Uniform stock selection, equal tickets and interpolation of stock ADVs are additional assumptions. Historical bucket frequencies need not be reproduced. The IR band is pointwise and the capacity interval comes from per-path threshold crossings. These are conditional ranges, not simultaneous bands or performance guarantees. The centre equals mean simulated IR because alpha-decay and TC are fixed. Ranges need not collapse at USD 0.5bn or current AUM: gross alpha is fixed, but sampled impact costs vary.
 
 The Fundamental Law of Active Management motivates separating skill, independent breadth and implementation efficiency. The dashboard does not estimate skill or breadth, and its TC scenario is not an estimated forecast-to-position correlation.
 
 ### Units and fitted relationships
 
-AUM uses USD billions; order/ADV is a fraction internally and a percentage in the interface. Alpha and tracking error use percentage points. For annual portfolio cost $C(A)$ in bp and tracking error $TE$ in percent:
-
-$$\Delta C_{IR}(A)=\frac{C(A)-C(0.5)}{100TE}.$$
+AUM uses USD billions; order/ADV is a fraction internally and a percentage in the interface. Annual gross/net alpha and tracking error use percentage points. Full annual impact $C(A)$ in bp converts to IR units as $C(A)/(100TE)$. The optional breakdown reconciles losses from the model-implied net IR at USD 0.5bn; baseline costs are not deducted twice.
 
 ### Academic foundations and model choices
 

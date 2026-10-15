@@ -34,11 +34,11 @@ class TransferCoefficientTests(unittest.TestCase):
         for points in ([[60,.5,1],[70,3,.6],[25,6,.3]],[[101,.5,1],[40,3,.6],[25,6,.3]],[[60,.5,1],[40,3,.6],[25,6,.7]],[[60,1,1],[40,3,.6],[25,6,.3]]):
             with self.assertRaises(ValueError): TransferCoefficientModel(points)
         strategy=default_strategy()
-        params={**strategy['parameters'],'model_kind':'Calibrated transfer coefficient','tc_points':[[60,.5,1],[40,3,.6],[25,6,.2]]}
+        params={**strategy['parameters'],'model_kind':'Three-pillar empirical','tc_points':[[60,.5,1],[40,3,.6],[25,6,.2]]}
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'strategies.json'
             save_strategy('TC',params,pd.DataFrame(strategy['buckets']),path=path)
             loaded=load_strategies(path)['TC']
             self.assertEqual(loaded['parameters']['tc_points'],params['tc_points'])
             self.assertEqual(loaded['parameters']['model_kind'],params['model_kind'])
-            self.assertEqual(loaded['methodology'],'three-point-tc-v1')
+            self.assertEqual(loaded['methodology'],'three-pillar-current-gross-v4')
