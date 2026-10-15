@@ -10,6 +10,7 @@ from typing import Any
 
 import pandas as pd
 
+from universe_sampler import ADV_POINTS, validate_universe
 from impact_cost import fit_impact_cost
 from transfer_coefficient import TransferCoefficientModel, DEFAULT_TC_POINTS
 from alpha_decay import AlphaDecayModel, DEFAULT_POINTS
@@ -29,6 +30,7 @@ DEFAULT_IR_POINTS = pd.DataFrame({
 
 DEFAULT_PARAMETERS: dict[str, Any] = {
     "model_kind": "Three-pillar empirical", "alpha_points": DEFAULT_POINTS, "tc_points": DEFAULT_TC_POINTS,
+    "universe_size": 300, "annual_trades": 971,
     "turnover": 13.9, "aum0": 3.4, "gross_alpha": 0.5, "tracking_error": 1.3,
     "max_aum": 15.0, "daily": 20.0, "half_life": 10.0,
     "annual_cost_bps": annual_cost_from_buckets(BUCKETS, 13.9),
@@ -52,7 +54,7 @@ def default_strategy() -> dict[str, Any]:
         "name": "Swiss Strategy",
         "parameters": deepcopy(DEFAULT_PARAMETERS),
         "buckets": BUCKETS[BUCKET_COLUMNS].to_dict("records"),
-        "adv_points": [],
+        "adv_points": ADV_POINTS.to_dict("records"),
         "ir_points_source": "illustrative-default",
         "ir_points": DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records"),
     }
@@ -70,6 +72,8 @@ def load_strategies(path: Path = STORE_PATH) -> dict[str, dict[str, Any]]:
             strategy["ir_points"] = strategy.get(
                 "ir_points", DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records"),
             )
+            if not strategy.get("adv_points"):
+                strategy["adv_points"] = ADV_POINTS.to_dict("records")
             validate_strategy(
                 name, strategy["parameters"], strategy.get("buckets", []),
                 strategy.get("adv_points", []), strategy["ir_points"],
@@ -144,7 +148,7 @@ def validate_strategy(
         fit_impact_cost(bucket_frame)
     if trades is not None:
         validate_trades(pd.DataFrame(trades))
-    # Legacy universe ADV is preserved for compatibility, not used or calibrated.
+    validate_universe(pd.DataFrame(adv_points), parameters["universe_size"], parameters["annual_trades"])
 
     ir_frame = pd.DataFrame(
         DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records") if ir_points is None else ir_points,
@@ -170,7 +174,7 @@ def save_strategy(
 ) -> None:
     clean_name = name.strip()
     bucket_records = buckets[BUCKET_COLUMNS].to_dict("records")
-    adv_records = [] if adv_points is None else adv_points.reindex(columns=ADV_COLUMNS).to_dict("records")
+    adv_records = (ADV_POINTS if adv_points is None else adv_points).reindex(columns=ADV_COLUMNS).to_dict("records")
     existing: dict[str, Any] = {}
     if path.exists():
         existing = json.loads(path.read_text())
@@ -190,7 +194,7 @@ def save_strategy(
         "ir_points": ir_records,
         "ir_points_source": "saved",
         "trades": trade_records,
-        "methodology": "three-pillar-empirical-v1" if parameters["model_kind"] == "Three-pillar empirical" else "three-point-tc-v1" if parameters["model_kind"] == "Calibrated transfer coefficient" else "three-point-alpha-decay-v1" if parameters["model_kind"] == "Calibrated alpha decay" else MODEL_VERSION,
+        "methodology": "three-pillar-universe-adv-v2" if parameters["model_kind"] == "Three-pillar empirical" else "three-point-tc-v1" if parameters["model_kind"] == "Calibrated transfer coefficient" else "three-point-alpha-decay-v1" if parameters["model_kind"] == "Calibrated alpha decay" else MODEL_VERSION,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")

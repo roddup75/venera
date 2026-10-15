@@ -19,9 +19,12 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved['parameters']['annual_cost_bps'],12.)
         self.assertEqual(saved['parameters']['mc_samples'],1234)
         self.assertEqual(saved['parameters']['mc_seed'],42)
+        self.assertEqual(saved['parameters']['universe_size'],300)
+        self.assertEqual(saved['parameters']['annual_trades'],971)
+        self.assertEqual(saved['adv_points'],source['adv_points'])
         self.assertEqual(saved['ir_points'][1]['ir'],.31)
         self.assertEqual(saved['trades'], trades.to_dict('records'))
-        self.assertEqual(saved['methodology'],'three-pillar-empirical-v1')
+        self.assertEqual(saved['methodology'],'three-pillar-universe-adv-v2')
         engine=ExecutionEngine(Scenario(aum0=8), trades=pd.DataFrame(saved['trades']))
         self.assertEqual(engine.metric(8)['Alpha capture (%)'],100)
 

@@ -1,0 +1,52 @@
+{
+  "currency": "USD",
+  "universeSize": 300,
+  "annualTrades": 971,
+  "source": "User-confirmed locally saved Swiss Strategy ADV percentiles",
+  "quantiles": [
+    {
+      "percentile": 0,
+      "advUsd": 2100
+    },
+    {
+      "percentile": 10,
+      "advUsd": 26122
+    },
+    {
+      "percentile": 20,
+      "advUsd": 79193
+    },
+    {
+      "percentile": 30,
+      "advUsd": 210143
+    },
+    {
+      "percentile": 40,
+      "advUsd": 732017
+    },
+    {
+      "percentile": 50,
+      "advUsd": 1421908
+    },
+    {
+      "percentile": 60,
+      "advUsd": 2252971
+    },
+    {
+      "percentile": 70,
+      "advUsd": 4645386
+    },
+    {
+      "percentile": 80,
+      "advUsd": 7038416
+    },
+    {
+      "percentile": 90,
+      "advUsd": 26464707
+    },
+    {
+      "percentile": 100,
+      "advUsd": 200340169
+    }
+  ]
+}

@@ -8,13 +8,14 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from capacity_model import ExecutionEngine, Scenario, MODEL_VERSION, MIN_AUM, curve, validate_trades, create_engine
+from capacity_model import Scenario, MODEL_VERSION, MIN_AUM, curve, validate_trades
 from empirical_model import EmpiricalIRModel
+from universe_sampler import create_liquidity_engine, ADV_POINTS
 from bucket_sampler import bucket_migration
 from impact_cost import fit_impact_cost, impact_bps, impact_curve
 from transfer_coefficient import TransferCoefficientModel
 from alpha_decay import AlphaDecayModel
-from strategy_store import (BUCKET_COLUMNS, ADV_COLUMNS, DEFAULT_PARAMETERS, IR_COLUMNS,
+from strategy_store import (BUCKET_COLUMNS, DEFAULT_PARAMETERS, IR_COLUMNS,
                             default_strategy, load_strategies, save_strategy)
 
 GREEN, AMBER, RUST, BLUE = "#42c7a5", "#f4bd50", "#ef7658", "#76a9d0"
@@ -277,11 +278,22 @@ creator = inputs
 with inputs:
     st.subheader("Baseline order inputs")
     st.info("The existing buckets describe total parent-order notional / ADV, as confirmed. All order sizes are anchored to current AUM.")
-    source_options = ["Bucket approximation", "Trade CSV"]
+    source_options = ["Universe ADV sampler", "Trade CSV"]
     source = st.radio("Order input source", source_options,
                       index=1 if selected_strategy.get("trades") else 0,
                       key=main_key+"source", horizontal=True)
-    st.caption("Bucket mode uses the editable representative order/ADV and traded-value weights. Trade counts determine Monte Carlo sampling probabilities and count-weighted diagnostics. Estimated bucket costs calibrate the empirical model and the impact-cost demo. The legacy execution model uses its explicit sidebar annual-cost assumption. Share columns are historical metadata.")
+    st.caption("The universe sampler selects stocks uniformly with replacement and gives every order equal absolute notional. Historical buckets provide impact-cost calibration and comparison data; they do not determine simulated bucket frequencies. Trade CSV remains available for actual orders.")
+    universe_controls=st.columns(2)
+    universe_size=int(universe_controls[0].number_input("Stocks in universe",1,10000,int(saved.get("universe_size",300)),1,key=main_key+"universe_size",disabled=source=="Trade CSV"))
+    annual_trades=int(universe_controls[1].number_input("Annual parent orders (four quarters)",1,1000000,int(saved.get("annual_trades",971)),1,key=main_key+"annual_trades",disabled=source=="Trade CSV"))
+    st.caption(f"{annual_trades:,} annual orders ≈ {annual_trades/12:.2f} per month. Quarterly timing is not simulated; stock selections are independent.")
+    with st.expander("Universe ADV percentile inputs"):
+        active_adv_points=st.data_editor(pd.DataFrame(selected_strategy.get("adv_points") or ADV_POINTS.to_dict("records")),
+            hide_index=True,num_rows="dynamic",width="stretch",key=main_key+"adv_points",
+            column_config={"percentile":st.column_config.NumberColumn("Stock percentile",format="%.2f"),
+                           "advUsd":st.column_config.NumberColumn("ADV (USD/day)",format="%.2f")})
+        st.caption("Locally saved ADV boundaries; log-dollar interpolation at midpoint stock ranks approximates individual stocks. These are percentile boundaries, not decile means or an observed stock-level tape.")
+    st.subheader("Historical ADV buckets and estimated impact costs")
     bucket_editor_input=pd.DataFrame(selected_strategy["buckets"])[BUCKET_COLUMNS].copy()
     ratio_columns=["lower","upper","p"]
     bucket_editor_input[ratio_columns]*=100
@@ -304,7 +316,7 @@ with inputs:
             elif selected_strategy.get("trades"):
                 active_trades = validate_trades(pd.DataFrame(selected_strategy["trades"]))
             else:
-                st.warning("Upload a trade CSV or choose Bucket approximation.")
+                st.warning("Upload a trade CSV or choose Universe ADV sampler.")
                 st.stop()
             display_table(active_trades, hide_index=True, width="stretch")
         except (ValueError, TypeError, pd.errors.ParserError) as error:
@@ -324,9 +336,9 @@ with execution:
     ])
     demo_key = main_key+"pillars::"
     with sampler_tab:
-        st.write("Estimated bucket costs → automatically fitted impact curve → simulated trading books → impact cost across AUM.")
+        st.write("Universe ADV → equal-notional parent orders → ADV bucket migration → estimated impact costs.")
         controls=st.columns(3)
-        demo_samples=controls[0].number_input("Sampler Monte Carlo samples",2,20000,int(mc_samples),100,key=demo_key+"samples",help="Number of simulated books. Each book contains the observed parent-order count.")
+        demo_samples=controls[0].number_input("Sampler Monte Carlo samples",2,20000,int(mc_samples),100,key=demo_key+"samples",help="Number of simulated annual books. Universe mode uses the annual order-count input; CSV mode uses the observed row count.")
         demo_seed=controls[1].number_input("Sampler random seed",0,2**32-1,int(mc_seed),1,key=demo_key+"seed")
         turnover=controls[2].number_input("Impact one-way annual turnover (%)",min_value=0.,value=float(saved.get("turnover",13.9)),step=.5,key=demo_key+"impact_turnover",help="Annual portfolio drag = 2 × one-way turnover fraction × impact per traded dollar.")
         sample_aum_key=demo_key+"sample_aum"
@@ -338,13 +350,21 @@ with execution:
             st.session_state[sample_aum_key]=float(max_aum)
         st.session_state[demo_key+"preview_anchor"]=float(aum0)
         sample_aum=st.number_input("Sampler AUM (USD bn)",min_value=MIN_AUM,max_value=float(max_aum),step=.1,key=sample_aum_key,
-                                   help="The supplied buckets describe current AUM. Preview defaults to current AUM; changing it scales orders for a scenario without changing the baseline buckets.")
-        st.caption(f"Bucket baseline: current AUM (${aum0:g}bn). Preview order sizes are scaled by {sample_aum/aum0:.2f}×. The empirical net-IR anchor remains $0.5bn.")
-        st.caption("Bucket mode draws orders using observed count shares, average order notionals and the representative order/ADV values in Inputs & strategy. Trade CSV mode resamples complete observed orders. ADV stays fixed while order sizes scale from current AUM.")
+                                   help="Preview defaults to current AUM. Universe order size = 2 × turnover fraction × AUM / annual order count; stock ADV stays fixed.")
+        st.caption(f"Order-size baseline: current AUM (${aum0:g}bn). Preview order sizes are scaled by {sample_aum/aum0:.2f}×. The empirical net-IR anchor remains $0.5bn.")
+        st.caption("Universe mode samples stocks uniformly with replacement. Every order has the same absolute notional: 2 × one-way turnover fraction × AUM / annual parent-order count. Trade CSV mode resamples complete observed orders. ADV stays fixed as AUM grows.")
         if is_combined:
             mc_samples=int(demo_samples)
             mc_seed=int(demo_seed)
-        sampler=create_engine(scenario,active_buckets,active_trades,"Monte Carlo",int(demo_samples),int(demo_seed))
+        try:
+            sampler=create_liquidity_engine(scenario,active_buckets,active_trades,"Monte Carlo",int(demo_samples),int(demo_seed),
+                active_adv_points,universe_size,annual_trades,turnover)
+        except (ValueError,TypeError) as error:
+            st.error(f"Check sampler inputs: {error}")
+            st.stop()
+        if active_trades is None:
+            ticket=2*turnover/100*sample_aum*1e9/annual_trades
+            st.caption(f"Approximate universe: {universe_size:,} stocks · {annual_trades:,} orders per annual book · equal ticket at preview AUM: ${ticket:,.2f}. Total traded notional reconciles exactly to turnover in every simulated book.")
         sample_key=demo_key+"book"
         if sample_key in st.session_state and st.session_state[sample_key]>int(demo_samples):
             st.session_state[sample_key]=int(demo_samples)
@@ -355,8 +375,7 @@ with execution:
         book=sampler.sampled_book(int(sample_id)-1,float(sample_aum))
         # This view focuses on order composition and impact; signal parameters are separate.
         book=book.drop(columns=["Execution days","Absolute capture"])
-        if active_trades is None:
-            book.insert(0,"Baseline bucket",active_buckets.label.astype(str).to_numpy())
+
         c1,c2,c3=st.columns(3)
         c1.metric("Orders in sampled book",f"{int(book['Sampled orders'].sum()):,}")
         c2.metric("Selected AUM",f"USD {sample_aum:g}bn")
@@ -380,7 +399,7 @@ with execution:
             fig.update_yaxes(range=[0,100],ticksuffix='%')
             st.plotly_chart(style_figure(fig),width="stretch")
             st.caption(f"Same simulated book #{int(sample_id)} at all three levels: {int(book['Sampled orders'].sum()):,} parent orders, seed {int(demo_seed)}. Bars show the percentage of trades in each bucket. Order sizes grow with AUM; ADV stays fixed. Current means the Capacity Lab current AUM, independently of Sampler AUM and chart horizon.")
-            st.caption("Buckets include their lower bound and exclude their upper bound. An overflow bucket retains orders at or above the highest boundary. In bucket-input mode, representative order/ADV values determine the moves.")
+            st.caption("Buckets include their lower bound and exclude their upper bound. An overflow bucket retains orders at or above the highest boundary. Universe mode derives participation from equal tickets and stock ADV; CSV mode uses actual order/ADV pairs.")
             with st.expander("Bucket migration data"):
                 display_table(migration[['Scenario','AUM (USD bn)','Bucket','Trades','Trade share (%)']],hide_index=True,width="stretch")
                 st.download_button("Export bucket migration CSV",migration.assign(book_number=int(sample_id),seed=int(demo_seed)).to_csv(index=False),"bucket_migration.csv","text/csv")
@@ -401,55 +420,55 @@ with execution:
             metrics[1].metric("Sampled weighted impact",f"{sampled_average:.2f} bp")
             metrics[2].metric("Sampled order impact cost",f"${book['Estimated impact cost (USD)'].sum():,.0f}")
             metrics[3].metric("Implied annual portfolio drag",f"{2*turnover/100*sampled_average:.2f} bp")
-            st.caption("Observed impact uses baseline traded-value weights. Sampled impact and dollar cost describe the selected book; annual drag uses the turnover assumption.")
+            st.caption("Observed impact uses baseline traded-value weights. Sampled impact and dollar cost describe the selected book; annual drag uses the turnover assumption. Historical bucket frequencies are a comparison, not a calibration target for the universe sampler.")
             plot_max=max(float(observed_x.max()),float(book['Order/ADV at selected AUM'].max()),.001)
-            xs=np.linspace(0,plot_max,201)
+            log_impact_axis=plot_max>10*float(observed_x.max())
+            positive_x=np.r_[observed_x[observed_x>0],book.loc[book['Order/ADV at selected AUM']>0,'Order/ADV at selected AUM']]
+            xs=np.geomspace(float(positive_x.min())/2,plot_max,301) if log_impact_axis else np.linspace(0,plot_max,201)
             fig=go.Figure()
             fig.add_scatter(x=100*xs,y=impact_bps(xs,impact_a,impact_b,impact_gamma),mode="lines",name="Automatically fitted impact",line=dict(color=GREEN))
             fig.add_scatter(x=100*observed_x,y=actual_cost,mode="markers",name="Estimated bucket costs",marker=dict(color=AMBER,size=10))
             fig.add_scatter(x=100*book['Order/ADV at selected AUM'],y=book['Estimated impact (bp/traded dollar)'],mode="markers",name="Sampled order support",marker=dict(color=BLUE,symbol="x"))
-            fig.update_layout(title="Impact cost fitted to ADV buckets",xaxis_title="Parent order/ADV (%)",yaxis_title="Impact (bp per traded dollar)")
+            fig.update_layout(title="Impact cost fitted to ADV buckets",xaxis_title="Parent order/ADV (%)"+ (" · log scale" if log_impact_axis else ""),yaxis_title="Impact (bp per traded dollar)")
+            if log_impact_axis:
+                fig.update_xaxes(type="log")
             st.plotly_chart(style_figure(fig),width="stretch")
             cost_curve=impact_curve(sampler,max_aum,impact_a,impact_b,impact_gamma,turnover)
             fig=go.Figure()
             fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag P95 (portfolio bp)'],mode="lines",line=dict(width=0),showlegend=False)
-            fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag P05 (portfolio bp)'],mode="lines",line=dict(width=0),fill="tonexty",fillcolor="rgba(66,199,165,0.18)",name="5–95% order-resampling range")
+            fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag P05 (portfolio bp)'],mode="lines",line=dict(width=0),fill="tonexty",fillcolor="rgba(66,199,165,0.18)",name="5–95% stock-selection range" if active_trades is None else "5–95% order-resampling range")
             fig.add_scatter(x=cost_curve.AUM,y=cost_curve['Annual drag (portfolio bp)'],mode="lines",name="Mean annual impact drag",line=dict(color=GREEN))
             fig.update_layout(title="Estimated annual impact cost across AUM",xaxis_title="AUM (USD bn)",yaxis_title="Annual impact drag (portfolio bp)")
             fig.update_xaxes(range=[MIN_AUM,max_aum] if max_aum>MIN_AUM else [MIN_AUM,MIN_AUM+.01])
             st.plotly_chart(style_figure(fig),width="stretch")
-            st.caption("The cost curve is fitted automatically from estimated bucket costs; Monte Carlo varies order composition. Bands exclude uncertainty in the fit. Predictions outside the observed order/ADV range are extrapolations. Sampler count, seed and turnover also drive the combined empirical model. The isolated calibration triples are unchanged.")
+            st.caption("The cost curve is fitted automatically from estimated bucket costs; Monte Carlo varies selected stocks (or resamples actual CSV orders). Bands exclude uncertainty in the fit. Predictions outside the observed order/ADV range are extrapolations. Sampler count, seed and turnover also drive the combined empirical model. The isolated calibration triples are unchanged.")
             with st.expander("Fit details and exports"):
                 st.write(f"Automatic fit: a = {impact_a:.5f} bp, b = {impact_b:.5f} bp, curvature = {impact_gamma:.5f}. Equal-weight bucket RMSE = {impact_fit.rmse:.3f} bp.")
                 st.caption("The fitted curve uses fractional order/ADV. Portfolio costs use notional weights. Annual drag = 2 × one-way turnover fraction × weighted impact; dollar costs price the sampled orders directly.")
                 display_table(active_buckets[["label","p","trades","valueUsdMillion","cost"]],hide_index=True,width="stretch")
                 impact_metadata={"impact_a":impact_a,"impact_b":impact_b,"impact_gamma":impact_gamma,
                                  "one_way_turnover_pct":turnover,"calibration_column":"cost",
-                                 "baseline_aum_usd_bn":aum0,"samples":int(demo_samples),"seed":int(demo_seed)}
+                                 "baseline_aum_usd_bn":aum0,"samples":int(demo_samples),"seed":int(demo_seed),
+                                 "order_source":sampler.source,"universe_size":universe_size,"annual_orders":sampler.book_size}
                 st.download_button("Export sampled impact costs CSV",book.assign(aum_usd_bn=sample_aum,book_number=int(sample_id),**impact_metadata).to_csv(index=False),"sampled_impact_costs.csv","text/csv")
                 st.download_button("Export impact cost curve CSV",cost_curve.assign(**impact_metadata).to_csv(index=False),"impact_cost_curve.csv","text/csv")
         with book_details:
             edges=active_buckets.upper.to_numpy(float)
             labels=active_buckets.label.astype(str).tolist()+[f">={edges[-1]*100:g}%"]
-            if active_trades is None:
-                categories=np.arange(len(active_buckets))
-                observed_count=active_buckets.trades.to_numpy(float)
-                observed_value=active_buckets.valueUsdMillion.to_numpy(float)*1e6
-            else:
-                categories=np.searchsorted(edges,book['Baseline order/ADV'].to_numpy(),side="right")
-                observed_count=np.ones(len(active_trades))
-                observed_value=active_trades.q.to_numpy(float)
-            raw_counts=np.bincount(categories,weights=observed_count,minlength=len(labels))
-            raw_values=np.bincount(categories,weights=observed_value,minlength=len(labels))
+            # Historical bucket observations are a diagnostic, not a sampling prior.
+            raw_counts=np.r_[active_buckets.trades.to_numpy(float),0.]
+            raw_values=np.r_[active_buckets.valueUsdMillion.to_numpy(float)*1e6,0.]
+            categories=np.searchsorted(edges,book['Order/ADV at selected AUM'].to_numpy(),side="right")
             sampled_counts=np.bincount(categories,weights=book['Sampled orders'],minlength=len(labels))
             sampled_values=np.bincount(categories,weights=book['Sampled notional (USD)'],minlength=len(labels))
-            shares=pd.DataFrame({"Baseline bucket":labels,
-                "Observed count share (%)":100*raw_counts/raw_counts.sum(),"Sampled count share (%)":100*sampled_counts/sampled_counts.sum(),
-                "Observed notional share (%)":100*raw_values/raw_values.sum(),"Sampled notional share (%)":100*sampled_values/sampled_values.sum()})
-            st.caption("Baseline bucket labels stay fixed as AUM changes. Sampled total notional varies between books.")
-            for columns,title in [(["Observed count share (%)","Sampled count share (%)"],"Baseline buckets: order counts"),(["Observed notional share (%)","Sampled notional share (%)"],"Baseline buckets: traded notional")]:
-                melted=shares.melt(id_vars="Baseline bucket",value_vars=columns,var_name="Series",value_name="Share (%)")
-                fig=px.bar(melted,x="Baseline bucket",y="Share (%)",color="Series",barmode="group",title=title,color_discrete_sequence=[GREEN,AMBER])
+            total=sampled_values.sum()
+            shares=pd.DataFrame({"ADV bucket":labels,
+                "Historical count share (%)":100*raw_counts/raw_counts.sum(),"Simulated count share (%)":100*sampled_counts/sampled_counts.sum(),
+                "Historical notional share (%)":100*raw_values/raw_values.sum(),"Simulated notional share (%)":100*sampled_values/total if total>0 else np.zeros(len(labels))})
+            st.caption("Historical buckets describe current AUM; simulated shares describe the selected preview AUM. Universe-mode total notional is fixed by turnover, and equal tickets make count shares equal notional shares. A mismatch with history exposes the uniform-selection/equal-ticket assumptions.")
+            for columns,title in [(["Historical count share (%)","Simulated count share (%)"],"Historical vs simulated order counts"),(["Historical notional share (%)","Simulated notional share (%)"],"Historical vs simulated traded notional")]:
+                melted=shares.melt(id_vars="ADV bucket",value_vars=columns,var_name="Series",value_name="Share (%)")
+                fig=px.bar(melted,x="ADV bucket",y="Share (%)",color="Series",barmode="group",title=title,color_discrete_sequence=[GREEN,AMBER])
                 st.plotly_chart(style_figure(fig),width="stretch")
             positive=book[book['Sampled notional (USD)']>0].sort_values('Order/ADV at selected AUM').copy()
             positive['Order/ADV (% at selected AUM)']=100*positive['Order/ADV at selected AUM']
@@ -483,7 +502,9 @@ with execution:
             c1.metric("Implied AUM curvature", f"{candidate.k:.5f}")
             c2.metric("Implied congestion-to-IR curvature", f"{candidate.gamma:.5f}")
             st.caption("Curvatures are fitted automatically. Edit the triples to calibrate the shape. Trade percentages are count-weighted, not notional-weighted.")
-            reference = ExecutionEngine(scenario, active_buckets, active_trades)
+            reference = create_liquidity_engine(scenario, active_buckets, active_trades, "Deterministic",
+                                                adv_points=active_adv_points,universe_size=universe_size,
+                                                annual_trades=annual_trades,turnover=turnover)
             reference_share = [reference.metric(float(a))["Multi-day count (%)"] for a in ir_demo["AUM"]]
             st.caption("The dotted liquidity reference uses the active order data and Capacity Lab participation at current AUM. It is a comparison, not an automatic fit to your triples.")
             for x,y,title in [("AUM","Multi-day count (%)","AUM → trades >1 day"),
@@ -553,7 +574,7 @@ with execution:
 
 try:
     if is_combined:
-        engine=EmpiricalIRModel(scenario,alpha_points,tc_points,active_buckets,active_trades,turnover,calculation_mode,int(mc_samples),int(mc_seed))
+        engine=EmpiricalIRModel(scenario,alpha_points,tc_points,active_buckets,active_trades,turnover,calculation_mode,int(mc_samples),int(mc_seed),active_adv_points,universe_size,annual_trades)
         if aum0>engine.maximum:
             raise ValueError(f"Current AUM exceeds the nonnegative-retention domain (${engine.maximum:.2f}bn). Adjust the calibration points or current AUM.")
         if max_aum>engine.maximum:
@@ -569,7 +590,7 @@ try:
             max_aum = engine.maximum
         data = engine.curve(max_aum)
     elif calibrated:
-        order_count = len(active_trades) if active_trades is not None else int(round(active_buckets.trades.sum()))
+        order_count = len(active_trades) if active_trades is not None else annual_trades
         engine = AlphaDecayModel(alpha_points, tracking_error, aum0, mc_samples, mc_seed, order_count)
         if aum0 > engine.maximum:
             raise ValueError(f"Current AUM exceeds the 100% multi-day limit (${engine.maximum:.2f}bn).")
@@ -578,7 +599,7 @@ try:
             max_aum = engine.maximum
         data = engine.curve(max_aum, calculation_mode == "Monte Carlo")
     else:
-        engine = create_engine(scenario, active_buckets, active_trades, calculation_mode, int(mc_samples), int(mc_seed))
+        engine = create_liquidity_engine(scenario, active_buckets, active_trades, calculation_mode, int(mc_samples), int(mc_seed), active_adv_points, universe_size, annual_trades, turnover)
         data = curve(engine, max_aum)
 except (ValueError, TypeError) as error:
     st.error(f"Check model inputs: {error}")
@@ -623,7 +644,7 @@ with overview:
         st.caption("Three calibrated pillars: alpha retention × TC-alpha retention, less incremental estimated impact drag. Net IR is anchored to the alpha calibration's first point at $0.5bn. Costs already embedded in that net anchor are not subtracted again.")
         st.caption(f"Impact fit uses estimated bucket costs; one-way turnover {turnover:g}%. Beyond ${last_calibration_aum:g}bn is extrapolation. The domain ends when either retention factor reaches zero.")
         if calculation_mode=="Monte Carlo":
-            st.caption(f"{mc_samples:,} draws · {engine.book_size:,} orders per book · seed {mc_seed}. Pointwise 5–95% conditional ranges combine order-resampled incremental costs with independent binomial congestion counts. TC and fitted parameters stay fixed; the centre is the calibrated curve, not the nonlinear simulation mean.")
+            st.caption(f"{mc_samples:,} draws · {engine.book_size:,} orders per book · seed {mc_seed}. Pointwise 5–95% conditional ranges combine stock-sampled or CSV-resampled incremental costs with independent binomial congestion counts. TC and fitted parameters stay fixed; the centre is the calibrated curve, not the nonlinear simulation mean.")
     elif is_tc:
         st.caption(f"Three-point TC calibration · AUM curvature {engine.k:.5f} · TC-to-alpha curvature {engine.gamma:.5f}. Annual alpha is interpreted as net alpha with other effects fixed. No extra costs or alpha-decay multiplier are applied.")
         st.caption(f"Beyond ${last_calibration_aum:g}bn is extrapolation. Deterministic calibration; no uncertainty band is inferred from three estimated points.")
@@ -698,11 +719,13 @@ with overview:
                              calculation_mode=calculation_mode, mc_samples=mc_samples, mc_seed=mc_seed,
                              parent_order_count=engine.book_size)
     if is_combined:
-        export=data.assign(methodology="three-pillar-empirical-v1",model=model_kind,
+        export=data.assign(methodology="three-pillar-universe-adv-v2",model=model_kind,
                            alpha_points=json.dumps(alpha_points),tc_points=json.dumps(tc_points),
                            tracking_error_pct=tracking_error,baseline_aum_usd_bn=aum0,
                            net_ir_anchor=engine.initial_ir,net_ir_anchor_aum=.5,one_way_turnover_pct=turnover,
                            impact_a=engine.fit.a,impact_b=engine.fit.b,impact_gamma=engine.fit.gamma,
+                           order_source=engine.orders.source,universe_size=universe_size,parent_order_count=engine.book_size,
+                           adv_percentiles=json.dumps(active_adv_points.to_dict("records")),
                            calculation_mode=calculation_mode,mc_samples=int(mc_samples),mc_seed=int(mc_seed))
     if is_tc:
         export = data.assign(methodology="three-point-tc-v1", model=model_kind,
@@ -890,13 +913,14 @@ with creator:
                 return value
             parameters = {**saved, "engine_name": "Execution delay", "model_kind": model_kind, "alpha_points": alpha_points, "tc_points": tc_points, "aum0": aum0,
                           "gross_alpha": gross_alpha, "tracking_error": tracking_error,
+                          "universe_size":universe_size,"annual_trades":annual_trades,
                           "max_aum": max_aum, "turnover": turnover, "daily": daily, "half_life": half_life,
                           "annual_cost_bps": annual_cost_bps, "cost_elasticity": cost_elasticity,
                           "calculation_mode": calculation_mode, "mc_samples": int(mc_samples), "mc_seed": int(mc_seed),
                           "minimum_ir": minimum_ir, "retained_threshold": retained_threshold,
                           "regulatory_aum": marker_value(regulatory_raw), "competition_aum": marker_value(competition_raw)}
             save_strategy(strategy_name, parameters, active_buckets,
-                          pd.DataFrame(selected_strategy.get("adv_points", []), columns=ADV_COLUMNS),
+                          active_adv_points,
                           ir_points=creator_ir_points, trades=active_trades)
         except (OSError, KeyError, TypeError, ValueError) as error:
             st.error(f"Strategy was not saved: {error}")

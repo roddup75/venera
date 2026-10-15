@@ -3,13 +3,13 @@ import numpy as np
 import pandas as pd
 from alpha_decay import AlphaDecayModel
 from transfer_coefficient import TransferCoefficientModel
-from capacity_model import create_engine
+from universe_sampler import create_liquidity_engine
 from impact_cost import fit_impact_cost,impact_bps
 
 
 class EmpiricalIRModel:
     def __init__(self,scenario,alpha_points,tc_points,buckets,trades=None,turnover=13.9,
-                 mode='Monte Carlo',samples=2000,seed=2026):
+                 mode='Monte Carlo',samples=2000,seed=2026,adv_points=None,universe_size=300,annual_trades=971):
         self.p=scenario
         self.alpha=AlphaDecayModel(alpha_points,scenario.tracking_error)
         self.tc=TransferCoefficientModel(tc_points,scenario.tracking_error)
@@ -21,8 +21,8 @@ class EmpiricalIRModel:
             raise ValueError('One-way annual turnover must be finite and nonnegative.')
         self.turnover=float(turnover)
         self.mode=mode;self.samples=int(samples);self.seed=int(seed)
-        self.orders=create_engine(scenario,buckets,trades,mode,samples,seed)
-        self.book_size=len(trades) if trades is not None else max(1,int(round(buckets.trades.sum())))
+        self.orders=create_liquidity_engine(scenario,buckets,trades,mode,samples,seed,adv_points,universe_size,annual_trades,turnover)
+        self.book_size=self.orders.book_size
         self.fit=fit_impact_cost(buckets)
         self.maximum=min(self.alpha.maximum,self.tc.maximum)
         for model in (self.alpha,self.tc):

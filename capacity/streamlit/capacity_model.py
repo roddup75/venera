@@ -165,7 +165,7 @@ class MonteCarloEngine(ExecutionEngine):
     Store only mean weights, not a samples-by-orders matrix. Replaying the seed
     yields identical books for uncertainty ranges and all AUM checkpoints.
     """
-    def __init__(self, scenario: Scenario, buckets=None, trades=None, samples=2000, seed=2026):
+    def __init__(self, scenario: Scenario, buckets=None, trades=None, samples=2000, seed=2026, book_size=None):
         super().__init__(scenario, buckets, trades)
         if isinstance(samples, bool) or not isinstance(samples, (int, np.integer)) or not 2 <= samples <= 20000:
             raise ValueError("Monte Carlo samples must be an integer between 2 and 20,000.")
@@ -184,6 +184,10 @@ class MonteCarloEngine(ExecutionEngine):
                 raise ValueError("Monte Carlo buckets require positive traded value exactly where order counts are positive.")
             self.book_size = max(1, int(round(counts.sum())))
             self.unit_notional = np.divide(value, counts, out=np.zeros_like(value), where=counts > 0)
+        if book_size is not None:
+            if isinstance(book_size, bool) or not isinstance(book_size, (int, np.integer)) or not 1 <= book_size <= 1_000_000:
+                raise ValueError("Annual parent-order count must be an integer between 1 and 1,000,000.")
+            self.book_size = int(book_size)
         self.order_notional_usd = self.unit_notional.copy() * (1 if trades is not None else 1e6)
         self.unit_notional = self.unit_notional / self.unit_notional.max()
         self.probabilities = self.count_weights.copy()

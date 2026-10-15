@@ -30,7 +30,7 @@ Estimate how a strategy's net performance changes as assets under management (AU
 
 The dashboard reports net IR, annual net alpha and the AUM associated with the minimum-IR and zero-IR thresholds. IR is net alpha divided by tracking error. Use the same return horizon and risk conventions when comparing results.
 
-\textbf{Two AUM references have different jobs.} Current AUM anchors the supplied trading observations: the ADV buckets describe orders traded at current strategy size. USD 0.5bn is the starting point of the calibrated net-IR curve. The sampler preview defaults to current AUM; the empirical curve starts at USD 0.5bn.
+\textbf{Two AUM references have different jobs.} Current AUM anchors historical trading observations. In universe mode, scenario order size is derived from AUM, turnover and the annual order count; stock ADV stays fixed. USD 0.5bn is the starting point of the calibrated net-IR curve. The sampler preview defaults to current AUM; the empirical curve starts at USD 0.5bn.
 
 \section{Two complementary approaches}
 \subsection{Empirical approach}
@@ -48,19 +48,20 @@ Use comparable observations: the same investment period, risk conventions and co
 \newpage
 \section{Empirical approach: inputs, pillars and calibration}
 \subsection{Inputs}
-Start in \textbf{Inputs \& strategy} and confirm that the trading observations correspond to the selected current AUM.
+Start in \textbf{Inputs \& strategy}. Confirm the universe ADV percentiles and annual parent-order count, and check that historical bucket observations correspond to current AUM.
 
 \begin{tabularx}{\textwidth}{@{}p{.27\textwidth}L@{}}
 \toprule
 Input & Purpose and units \\
 \midrule
-Current AUM & Size at which the observed orders apply; USD billions. \\
-ADV buckets & Parent-order size divided by average daily traded value (ADV), grouped into liquidity buckets. \\
-Order counts and value & Counts determine sampling probabilities; traded value determines portfolio cost weights. \\
+Current AUM & Historical order-size reference; USD billions. \\
+ADV percentiles & Locally saved USD daily ADV boundaries; interpolate to approximate a 300-stock universe. \\
+Annual parent orders & Default 971 across four quarters, about 81 per month. \\
+Historical ADV buckets & Ratios and estimated costs for fitting; counts and notionals for comparison. \\
 Estimated bucket impact & Positive cost in basis points (bp) per traded dollar. \\
-One-way annual turnover & Annual buys plus sells divided by AUM is twice this turnover fraction. \\
+One-way annual turnover & Twice this fraction gives annual traded value / AUM. \\
 Tracking error & Fixed annual active-return risk, entered in percent. \\
-Calibration triples & Three points for alpha decay and three for TC; detailed on the next page. \\
+Calibration triples & Three points each for alpha decay and TC. \\
 Minimum net IR & Performance threshold used to indicate capacity. \\
 \bottomrule
 \end{tabularx}
@@ -71,9 +72,13 @@ Alternatively, upload actual parent orders with positive \texttt{q} (order notio
 \subsubsection{Impact costs: larger orders are more expensive to trade}
 The \textbf{ADV bucket sampler} automatically fits a nonnegative power cost curve to the estimated bucket impacts. There are no per-bucket sliders or manual impact-fit controls. Each bucket has equal weight in fitting; aggregate portfolio costs use traded-notional weights.
 
-Order sizes scale in proportion to AUM while ADV stays fixed. A book preview at current AUM reproduces the input order-size scale. Selecting another preview AUM applies a scenario multiplier. The frequency chart compares the same book at current AUM, twice current AUM and three times current AUM; an overflow bucket retains orders beyond the highest boundary.
+\textbf{Generate orders from the stock universe.} Interpolate the locally saved ADV boundaries in log USD at 300 equally spaced midpoint stock ranks. This approximates individual stock ADVs; it does not recover the original stock observations. Each stock has equal selection probability and can be selected repeatedly.
 
-The sampler reports impact per traded dollar, sampled-order cost in USD and annual portfolio drag. Annual drag in bp equals weighted impact multiplied by twice one-way annual turnover. For example, 13.90\% one-way turnover gives a multiplier of 0.278. This annualisation is separate from pricing the displayed book's orders directly.
+For $N=971$ annual orders, one-way turnover fraction $T$ and AUM $A$ in USD billions, the equal ticket is $q(A)=2TA10^9/N$ USD. Order/ADV is $q(A)/ADV_i$. Each annual book therefore trades exactly twice one-way turnover times AUM. At USD 3.4bn and 13.90\% turnover, each ticket is USD 973,429.45. Trade count and turnover are editable; timing within quarters is not simulated.
+
+The stock ADVs generate the buckets. Reuse the same stock selections at current AUM, twice current AUM and three times current AUM, scaling tickets with AUM while ADV stays fixed. An overflow bucket retains orders above 100\% ADV. Historical bucket frequencies are a diagnostic, not a calibration target.
+
+Annual cost in bp is average impact multiplied by twice one-way turnover. Equal tickets make count and notional weights identical; CSV mode preserves actual notionals. Nonlinear impact has an empirical literature~\cite{almgren}, but this specific fit remains a scenario estimate, especially outside the observed participation range.
 
 \newpage
 \subsubsection{Alpha decay: execution congestion reduces performance}
@@ -151,12 +156,12 @@ A sample is an alternative trading book and congestion outcome, not a draw of an
  bluebox/.style={box,draw=blue!45!black,fill=blue!4},
  wide/.style={box,text width=13.5cm},
  flow/.style={-{Stealth[length=2mm]},thick,draw=capacitygreen!80!black}]
-\node[wide] (setup) {\textbf{Start with observed orders and fixed calibration}\\
-$N$ = observed parent-order count per book; current AUM anchors order sizes.\\
+\node[wide] (setup) {\textbf{Start with order inputs and fixed calibration}\\
+$N$ = annual orders per book (default 971); universe size = 300 stocks.\\
 Impact curve, congestion probability $p(A)$ and TC retention are fixed.};
 \node[box,below=8mm of setup.south west,anchor=north west] (book) {
 \textbf{1a. Draw a cost book: $N$ orders}\\
-\textbf{Buckets:} draw bucket counts using observed count shares (multinomial).\\
+\textbf{Universe:} select stocks uniformly with replacement; equal order notionals.\\
 \textbf{Or CSV:} resample complete order/ADV pairs with replacement (bootstrap).};
 \node[bluebox,below=8mm of setup.south east,anchor=north east] (congestion) {
 \textbf{1b. Draw multi-day trade counts}\\
@@ -164,7 +169,7 @@ At each AUM $A$, draw\\
 $K(A)\sim\mathrm{Binomial}(N,p(A))$.\\
 Each order has the same calibrated probability of taking more than one day.};
 \node[box,below=7mm of book] (cost) {\textbf{2a. Calculate incremental cost}\\
-Reuse this book across AUM; scale order sizes with AUM and keep ADV fixed.\\
+Reuse stock selections across AUM; scale equal tickets and keep ADV fixed.\\
 Compare each cost with this book's own USD 0.5bn baseline; convert to IR units.};
 \node[bluebox,below=7mm of congestion] (alpha) {\textbf{2b. Calculate alpha-decay IR}\\
 Convert count to percentage: $100K(A)/N$.\\
@@ -185,15 +190,15 @@ More simulations improve numerical stability; each book still contains $N$ order
 \draw[flow] (combine) -- (repeat);
 \end{tikzpicture}
 \end{center}
-{\small\textbf{Figure 1. Sampling workflow.} Only the cost book is reused across AUM. The separate congestion counts do not track the same individual trades across the curve. The displayed central curve uses calibrated congestion and mean bootstrap impact; it is not the mean of the simulated final IR outcomes.}
+{\small\textbf{Figure 1. Sampling workflow.} Only the cost book is reused across AUM. The separate congestion counts do not track the same individual trades across the curve. The displayed central curve uses calibrated congestion and mean simulated impact; it is not the mean of the simulated final IR outcomes.}
 
-\textbf{What is inside a bucket?} Each proxy order uses the bucket's representative order/ADV and average notional. No continuous within-bucket distribution is drawn. Multinomial and binomial sampling are standard count models~\cite{agresti}; resampling observed CSV rows is the empirical bootstrap~\cite{efron}. The seed makes draws reproducible.
+\textbf{Where do buckets come from?} Each sampled stock's ADV and the equal ticket determine order/ADV. Reclassify these ratios at each AUM; do not draw from historical bucket shares. Uniform stock selection is equivalent to multinomial stock counts with probabilities $1/300$. Binomial and multinomial sampling are standard count models~\cite{agresti}; CSV resampling is the empirical bootstrap~\cite{efron}. The seed makes draws reproducible.
 
 \newpage
 \subsection{Interpretation and limitations}
-For alpha-decay purposes, orders are exchangeable: the model has no trade-specific alpha forecasts or delay sensitivities. This is a count-based approximation, not an explicit allocation of equal alpha dollars to every trade. Cost aggregation remains notional-weighted.
+For alpha-decay purposes, orders are exchangeable: the model has no trade-specific alpha forecasts or delay sensitivities. This is a count-based approximation, not an explicit allocation of equal alpha dollars to every trade. Cost aggregation remains notional-weighted; in universe mode this equals count weighting because tickets are equal.
 
-Congestion-count draws and cost composition are independent in the simulation. In reality, difficult-to-execute trades may carry more or less alpha. The ranges exclude this dependence, calibration uncertainty, clustered orders and changes in market liquidity. They are conditional pointwise ranges, not simultaneous confidence bands or guarantees of future performance. The centre curve uses the calibrated congestion share and mean bootstrap impact, not the mean of the nonlinear final outcomes. Ranges collapse at the USD 0.5bn anchor.
+Congestion-count draws and cost composition are independent in the simulation. In reality, difficult-to-execute trades may carry more or less alpha. The ranges exclude this dependence, calibration uncertainty, clustered orders and changes in market liquidity. The universe sampler also assumes uniform stock selection, equal tickets and a percentile-derived ADV approximation; it does not reproduce historical bucket frequencies by construction. They are conditional pointwise ranges, not simultaneous confidence bands or guarantees of future performance. The centre curve uses the calibrated congestion share and mean simulated impact, not the mean of the nonlinear final outcomes. Ranges collapse at the USD 0.5bn anchor.
 
 The Fundamental Law of Active Management motivates separating forecast skill, independent breadth and implementation efficiency. This dashboard does not estimate skill or independent breadth, and its TC scenario is not an estimated forecast-to-position correlation~\cite{grinold,clarke}.
 
@@ -205,7 +210,7 @@ AUM is in USD billions. Order/ADV is a fraction internally and a percentage in t
 \subsection{Academic foundations and model choices}
 The references support the sampling methods and the economic motivation for the pillars. Efron describes the bootstrap~\cite{efron}; Agresti covers binomial and multinomial count models~\cite{agresti}. Almgren and co-authors study nonlinear market impact~\cite{almgren}. G\^arleanu and Pedersen analyse trading with decaying return predictors and transaction costs~\cite{garleanu}. Grinold and Clarke and co-authors provide the active-management and implementation-efficiency context~\cite{grinold,clarke}.
 
-\textbf{What the literature does not establish here.} Our three calibration points, fitted congestion-to-IR curve, TC-alpha retention mapping, independence of the two random paths and multiplicative combination are choices for this dashboard. The cited works do not validate these choices or turn the simulated percentile ranges into full forecast confidence intervals.
+\textbf{What the literature does not establish here.} Our uniform stock selection, equal tickets, interpolated ADV universe, three calibration points, fitted congestion-to-IR curve, TC-alpha retention mapping, independence of the two random paths and multiplicative combination are choices for this dashboard. The cited works do not validate these choices or turn the simulated percentile ranges into full forecast confidence intervals.
 
 \newpage
 \begin{thebibliography}{9}

@@ -2,7 +2,7 @@
 
 Streamlit is the only implementation. The default **Three-pillar empirical** model combines all inputs in Model Calibration:
 
-- Estimated impact costs fitted automatically from ADV buckets.
+- Uniform stock sampling from the saved ADV percentiles: 300 synthetic stocks, 971 equal-notional annual orders. ADV bucket migrations determine impact, using a cost curve fitted from historical bucket estimates.
 - Alpha retention calibrated from three (AUM, multi-day trade %, net IR) triples.
 - TC-alpha retention calibrated from three (TC %, AUM, annual alpha %) triples.
 

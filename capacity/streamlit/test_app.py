@@ -53,7 +53,7 @@ class AppTests(unittest.TestCase):
         editor=next(d for d in app.dataframe if 'p' in d.value.columns)
         self.assertEqual(editor.value.iloc[0]['p'],.5)
         book=next(d.value for d in app.dataframe if 'Baseline order/ADV (%)' in d.value.columns)
-        self.assertEqual(book.iloc[0]['Baseline order/ADV (%)'],.5)
+        self.assertGreater(book.iloc[0]['Baseline order/ADV (%)'],0)
         net=next(d.value for d in app.dataframe if 'Scenario' in d.value.columns and 'Net IR' in d.value.columns)['Net IR']
         self.assertTrue(any(abs(v-round(v,2))>1e-5 for v in net))
 
@@ -136,7 +136,7 @@ class AppTests(unittest.TestCase):
         impact=metric('Sampled weighted impact')
         next(n for n in app.number_input if n.label=='Impact one-way annual turnover (%)').set_value(0.).run()
         self.assertEqual(metric('Implied annual portfolio drag'),'0.00 bp')
-        self.assertEqual(metric('Sampled weighted impact'),impact)
+        self.assertEqual(metric('Sampled traded notional'),'USD 0.00m')
         self.assertEqual(len(app.exception),0,str(app.exception))
 
     def test_tc_calibration_apply_and_te_scaling(self):
@@ -161,8 +161,10 @@ class AppTests(unittest.TestCase):
         app=self.app()
         next(s for s in app.selectbox if s.label=='Calculation mode').set_value('Deterministic').run()
         next(n for n in app.number_input if n.label=='Current AUM ($bn)').set_value(3.).run()
-        def ir():return float(next(m.value for m in app.metric if m.label=='Current net IR'))
         def breakdown():return next(d.value for d in app.dataframe if 'Starting net IR' in d.value.columns)
+        def ir():
+            aum=next(n.value for n in app.number_input if n.label=='Current AUM ($bn)')
+            return float(breakdown().loc[lambda f:f.AUM==aum,'Net IR'].iloc[0])
         before=ir()
         table=breakdown()
         current=table[table.AUM==3.].iloc[0]
@@ -181,6 +183,20 @@ class AppTests(unittest.TestCase):
         self.assertLess(ir(),after_tc)
         self.assertAlmostEqual(ir(),breakdown()[breakdown().AUM==3.4]['Net IR'].iloc[0],places=3)
         self.assertEqual(len(app.exception),0,str(app.exception))
+
+    def test_universe_sampler_annual_count_recalculates_cost_and_summary(self):
+        app=self.app()
+        def metric(label):return next(m.value for m in app.metric if m.label==label)
+        self.assertEqual(next(r.value for r in app.radio if r.label=='Order input source'),'Universe ADV sampler')
+        self.assertEqual(next(n.value for n in app.number_input if n.label=='Stocks in universe'),300)
+        self.assertEqual(metric('Orders in sampled book'),'971')
+        before=float(metric('Sampled weighted impact').split()[0])
+        before_ir=float(metric('Current net IR'))
+        next(n for n in app.number_input if n.label=='Annual parent orders (four quarters)').set_value(1942).run()
+        self.assertEqual(len(app.exception),0,str(app.exception))
+        self.assertEqual(metric('Orders in sampled book'),'1,942')
+        self.assertLess(float(metric('Sampled weighted impact').split()[0]),before)
+        self.assertGreater(float(metric('Current net IR')),before_ir)
 
     def test_invalid_combined_calibration_remains_editable(self):
         app=self.app()
@@ -281,7 +297,7 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(params['turnover'],30.)
                 self.assertEqual(params['mc_samples'],100)
                 self.assertEqual(params['mc_seed'],42)
-                self.assertEqual(saved['methodology'],'three-pillar-empirical-v1')
+                self.assertEqual(saved['methodology'],'three-pillar-universe-adv-v2')
                 self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),before)
 
     def test_strategy_creator_save_and_reload(self):
