@@ -1,29 +1,14 @@
-# Capacity analysis
+# Capacity Lab
 
-Long-only equity strategy capacity model and interactive dashboard, using the live USD liquidity bucket data.
+Streamlit is the only implementation. The default **Three-pillar empirical** model combines all inputs in Model Calibration:
 
-## Run the web dashboard
+- Estimated impact costs fitted automatically from ADV buckets.
+- Alpha retention calibrated from three (AUM, multi-day trade %, net IR) triples.
+- TC-alpha retention calibrated from three (TC %, AUM, annual alpha %) triples.
 
-Requires Node.js 22.13 or later.
+The Empirical IR curve multiplies the two retention factors and subtracts only the increase in impact costs above the $0.5B net-IR anchor. Model Calibration edits update the curve and Summary immediately. Save inputs and settings through Inputs & strategy. The separate historical backtest comparison remains available. Legacy execution and isolated calibration modes can also be selected.
 
-```sh
-cd dashboard
-npm ci
-npm run dev -- --host 127.0.0.1 --port 3011
-```
-
-Open http://localhost:3011. Stop the server with `Ctrl+C` in the terminal that started it.
-
-Run the production checks from the dashboard directory with:
-
-```sh
-npm run build
-node --experimental-strip-types --test tests/adv-migration.test.mjs
-```
-
-## Run the Streamlit dashboard
-
-Python 3.11 or later is recommended.
+## Run
 
 ```sh
 cd streamlit
@@ -33,82 +18,26 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-On Windows PowerShell, replace the activation command with:
+Open http://localhost:8501. On Windows activate with `.venv\Scripts\Activate.ps1`.
 
-```powershell
-.venv\Scripts\Activate.ps1
-```
+## Views
 
-Streamlit normally opens http://localhost:8501. Stop the server with `Ctrl+C`.
-The Streamlit version reads the same live bucket and ADV calibration JSON files as the browser
-dashboard and recalculates the ADV and Burr models when inputs change.
-Its Strategy creator saves model defaults, liquidity buckets, ADV distributions and backtest IR observations as named cases;
-select a saved case from the sidebar to load it throughout the Capacity Lab.
-The saved trading-universe size constrains holdings and determines the finite stock-count grid used
-to interpolate the ADV percentile distribution (Swiss default: 203 stocks).
-An optional liquidity-deterioration elasticity stresses effective ADV as AUM grows, while the
-Overview tail chart reports threshold exceedances and the weighted 90th-percentile trade size.
-The **Strategy creator** accepts AUM and information-ratio observations from optimised historical
-backtests and saves them with the selected strategy. The **Backtest IR curve** tab starts from the
-fitted `IR(A) = a - b*A^gamma` parameters; the Capacity Lab sidebar can adjust them for the active
-analysis, while the Demo building blocks area provides an independent parameter demonstration.
-The **Summary** tab compares the capacity and backtest models using current-AUM IR, AUM at the
-selected minimum IR, and zero-IR AUM. It also compares implied IR at ×1, ×1.5, ×2, ×2.5 and ×3
-current AUM in separate tables and a grouped bar chart. The final Overview table uses the same grid.
+Summary is first and shows capacity thresholds, backtest comparison and the three-pillar IR decomposition. Empirical IR curve shows net IR and one net-alpha chart with conditional Monte Carlo ranges. Model Calibration contains the ADV sampler, alpha decay and TC calibration. Inputs & strategy combines editable input data and local saving. Methodology contains the current PDF download.
 
-Run its model tests with:
+The sampler displays vertical bars for trade frequency by ADV bucket at current AUM, ×2 and ×3, using the same simulated book. AUM, simulation count, seed and turnover are editable. Detailed book inspection and exports are expandable. Representative order ratios and estimated costs come from Inputs & strategy; there are no per-bucket sliders.
+
+## Data and interpretation
+
+Inputs live in `streamlit/data/`; originals are preserved in `streamlit/data/source/`. Parent-order CSVs require positive `q` and `adv` columns in the same currency. Order sizes scale from current AUM while ADV stays fixed. The net-IR anchor is the first alpha-calibration point at $0.5B. TC alpha is used as a relative factor rather than a second absolute anchor.
+
+The empirical curve defaults to Deterministic mode without intervals. Select Monte Carlo for conditional intervals, with 2,000 samples and seed 2026 as initial simulation settings. Combined bands vary order-resampled incremental costs and independent binomial congestion counts; TC and fit parameters stay fixed. They are conditional pointwise percentile ranges. The central curve uses the calibrated congestion share and mean bootstrap impact. Predictions beyond calibration points are labelled extrapolation; the combined domain ends when either retention factor reaches zero.
+
+## Verify
 
 ```sh
-cd streamlit
-python -m unittest test_capacity_model.py
+streamlit/.venv/bin/python -m unittest discover -s streamlit -p 'test_*.py'
 ```
 
-## Project contents
+See [methodology](streamlit/METHODOLOGY.md) and [Streamlit documentation](streamlit/README.md).
 
-- `dashboard/`: interactive capacity scenarios and model building block demos.
-- `streamlit/`: Python/Streamlit implementation of the interactive dashboard.
-- `long_only_capacity_tool.py`: Python capacity model.
-- `buckets_data_live.csv`: live bucket input data in USD.
-- `output/pdf/Long_Only_Capacity_Methodology.pdf`: updated methodology paper.
-- `output/pdf/Long_Only_Capacity_Methodology.tex`: editable methodology source.
-- `archive/` and `output/`: saved reports and model outputs.
-
-Dependencies, local Git metadata, caches, and temporary working files are excluded from the repository. The dashboard retains its own existing local Git repository; this upload includes its source files as ordinary files.
-
-## ADV-calibrated migration
-
-In the dashboard sidebar select **Migration model → ADV-calibrated migration**,
-then open **Liquidity migration**. Burr remains the default comparison model.
-The ADV engine uses the fixed historical anchor of $3.4bn, 40 assumed holdings,
-971 annual parent orders and $944.475m traded value (13.889338% one-way turnover).
-The 13.9% scenario default is rounded and therefore produces slightly more trading.
-
-The model interpolates ADV in log dollars between the supplied stock-count
-percentiles. For each execution bucket, it creates a grid of ADV and participation
-values and exponentially tilts prior weights to reconcile both count and dollars.
-A broad log-ticket prior has standard deviation 1.5. Liquidity preference modifies
-the ADV prior and triggers refitting. This identifies a plausible joint distribution,
-not the actual portfolio or a unique historical order allocation.
-
-Tickets scale as `(A / 3.4bn) * (40 / holdings)`; frequency scales as
-`(holdings / 40) * (turnover / historical turnover)`. ADV stress changes available
-volume without refitting historical data. These rules conserve `annual value = 2*A*T`.
-The live parent-order sample is treated as observed one-day execution. For each
-synthetic order, daily capacity is the greater of its demonstrated current-AUM
-participation and the selected daily-participation input. Required days are reported
-without truncation as AUM scales. The horizon limits completed notional; uncompleted
-fractions receive no captured alpha and incur no execution impact. Alpha and costs
-are normalized to the historical portfolio. Stock overlap and concurrent orders
-cannot be inferred from these aggregate inputs.
-
-The ADV model uses observed counts and dollar values, not editable rounded share
-percentages. Edited expected costs still adjust its impact anchor. The original
-Burr demo remains explicitly labeled, while the alpha-decay demo uses the selected
-engine. CSV exports identify the engine and include ADV execution-feasibility fields.
-
-Model checks (Node 22.13+):
-
-```sh
-cd dashboard
-node --experimental-strip-types --test tests/adv-migration.test.mjs
-```
+Tables display at most two decimals, with order/ADV ratios shown as percentages. Model calculations, saved values and CSV exports preserve full precision. Select Deterministic (default) or Monte Carlo in Capacity Lab to hide or show the empirical curve's conditional intervals.

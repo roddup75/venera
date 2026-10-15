@@ -1,23 +1,24 @@
-"""Core calculations for the Streamlit Capacity Lab dashboard."""
+"""Notional-weighted execution-delay model with default Monte Carlo bootstrap.
 
+Percent inputs are percentage points; annual costs are portfolio basis points.
+The bucket approximation uses one explicitly supplied order/ADV point per bucket.
+"""
 from __future__ import annotations
-
 from dataclasses import dataclass
 import json
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
-
-ROOT = Path(__file__).resolve().parents[1]
-LIVE = json.loads((ROOT / "dashboard/app/bucket-data.json").read_text())
-UNIVERSE = json.loads((ROOT / "dashboard/app/universe-adv-data.json").read_text())
+LIVE = json.loads((Path(__file__).parent / "data/bucket-data.json").read_text())
 BUCKETS = pd.DataFrame(LIVE["buckets"])
-ADV_POINTS = pd.DataFrame(UNIVERSE["quantiles"])
-MIGRATION_LABELS = [*BUCKETS["label"].tolist(), ">100%"]
-HISTORICAL_AUM = 3.4e9
-HISTORICAL_HOLDINGS = 40
+MODEL_VERSION = "execution-delay-mc-v2"
+MIN_AUM = 0.5  # USD billions; lower bound for scenario calculations.
+
+
+def annual_cost_from_buckets(buckets: pd.DataFrame, one_way_turnover_pct: float) -> float:
+    """Legacy conversion: buys + sells / AUM = 2 * one-way turnover."""
+    return float(2 * one_way_turnover_pct / 100 * np.average(buckets.cost, weights=buckets.valueUsdMillion))
 
 
 @dataclass(frozen=True)
@@ -25,331 +26,267 @@ class Scenario:
     aum0: float = 3.4
     gross_alpha: float = 0.5
     tracking_error: float = 1.3
-    turnover: float = 13.9
-    holdings: int = 40
-    universe_size: int = 203
-    scale_elasticity: float = 0.85
-    tail_elasticity: float = 0.0
     daily_participation: float = 20.0
-    max_days: int = 10
     half_life: float = 10.0
-    adv_volume: float = 100.0
-    liquidity_deterioration: float = 0.0
-    burr_c: float = LIVE["calibration"]["burrC"]
-    burr_d: float = LIVE["calibration"]["burrD"]
-    burr_scale: float = LIVE["calibration"]["burrScale"]
-    impact_a: float = LIVE["calibration"]["impactA"]
-    impact_b: float = LIVE["calibration"]["impactB"]
-    impact_gamma: float = LIVE["calibration"]["impactGamma"]
+    annual_cost_bps: float = annual_cost_from_buckets(BUCKETS, 13.9)
+    cost_elasticity: float = 0.0
 
 
-def adv_at(q: float, adv_points: pd.DataFrame | None = None) -> float:
-    points = ADV_POINTS if adv_points is None else adv_points
-    percentiles = points["percentile"].to_numpy(float)
-    values = points["advUsd"].to_numpy(float)
-    target = q * 100
-    hi = int(np.searchsorted(percentiles, target, side="left"))
-    if hi <= 0:
-        return float(values[0])
-    if hi >= len(values):
-        return float(values[-1])
-    t = (target - percentiles[hi - 1]) / (percentiles[hi] - percentiles[hi - 1])
-    return float(np.exp(np.log(values[hi - 1]) * (1 - t) + np.log(values[hi]) * t))
+def alpha_capture(duration, half_life: float):
+    """Average exp(-lambda*t) over continuous uniform fills, including g(0)=1."""
+    d = np.asarray(duration, dtype=float)
+    if not np.isfinite(half_life) or half_life <= 0 or not np.isfinite(d).all() or (d < 0).any():
+        raise ValueError("Duration must be finite and non-negative; half-life must be positive.")
+    z = np.log(2) * d / half_life
+    result = np.ones_like(z)
+    np.divide(-np.expm1(-z), z, out=result, where=z != 0)
+    return result
 
 
-def calibrate_orders(
-    preference: float = 0.0,
-    buckets: pd.DataFrame | None = None,
-    adv_points: pd.DataFrame | None = None,
-    universe_size: int = 203,
-) -> pd.DataFrame:
-    bucket_data = BUCKETS if buckets is None else buckets.reset_index(drop=True)
-    points = ADV_POINTS if adv_points is None else adv_points.reset_index(drop=True)
-    stock_grid_size = max(2, min(int(universe_size), 1000))
-    rows: list[dict] = []
-    for bucket, b in bucket_data.iterrows():
-        mean = b.valueUsdMillion * 1e6 / b.trades
-        cells = []
-        for j in range(stock_grid_size):
-            q = (j + 0.5) / stock_grid_size
-            adv = adv_at(q, points)
-            for k in range(16):
-                participation = b.lower + (b.upper - b.lower) * (k + 0.5) / 16
-                ticket = participation * adv
-                prior = preference * (2 * q - 1) - 0.5 * (np.log(ticket / mean) / 1.5) ** 2
-                cells.append((adv, ticket, prior))
-        frame = pd.DataFrame(cells, columns=["adv", "ticket", "prior"])
-        maximum = frame.ticket.max()
-        if not frame.ticket.min() < mean < maximum:
-            raise ValueError(f"Cannot reconcile {b.label} with supplied ADV support")
+def validate_trades(tape: pd.DataFrame) -> pd.DataFrame:
+    if tape.empty or not {"q", "adv"}.issubset(tape.columns):
+        raise ValueError("Trade CSV requires at least one row and q, adv columns in the same currency.")
+    try:
+        frame = tape[["q", "adv"]].apply(pd.to_numeric, errors="raise")
+    except (ValueError, TypeError) as error:
+        raise ValueError("q and adv must contain positive finite numbers.") from error
+    if not np.isfinite(frame.to_numpy()).all() or (frame <= 0).any().any():
+        raise ValueError("q and adv must contain positive finite numbers.")
+    return frame
 
-        def weights(tilt: float) -> np.ndarray:
-            logs = frame.prior.to_numpy() + tilt * frame.ticket.to_numpy() / maximum
-            raw = np.exp(logs - logs.max())
-            return raw / raw.sum()
 
-        def expectation(tilt: float) -> float:
-            return float(np.dot(weights(tilt), frame.ticket))
+def validate_buckets(buckets: pd.DataFrame) -> None:
+    columns = ["p", "valueUsdMillion", "trades", "cost", "lower", "upper"]
+    try:
+        values = buckets[columns].to_numpy(float)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("Order buckets require numeric bounds, p, valueUsdMillion, trades and cost.") from error
+    if buckets.empty or not np.isfinite(values).all():
+        raise ValueError("Order bucket inputs must be finite and non-empty.")
+    if (buckets[["p", "valueUsdMillion", "trades", "cost", "lower"]] < 0).any().any():
+        raise ValueError("Order bucket sizes, values, counts and costs cannot be negative.")
+    if buckets.valueUsdMillion.sum() <= 0 or buckets.trades.sum() <= 0:
+        raise ValueError("Order buckets require positive total notional and count.")
+    if (buckets.upper <= buckets.lower).any() or (buckets.p < buckets.lower).any() or (buckets.p > buckets.upper).any():
+        raise ValueError("Representative order/ADV must lie within valid bucket bounds.")
 
-        lo, hi = -1.0, 1.0
-        while expectation(lo) > mean and lo > -1e9:
-            lo *= 2
-        while expectation(hi) < mean and hi < 1e9:
-            hi *= 2
-        for _ in range(70):
+
+class ExecutionEngine:
+    def __init__(self, scenario: Scenario, buckets: pd.DataFrame | None = None, trades: pd.DataFrame | None = None):
+        self.p = scenario
+        vals = np.array(list(vars(scenario).values()), float)
+        if not np.isfinite(vals).all():
+            raise ValueError("Model parameters must be finite.")
+        if scenario.aum0 < MIN_AUM or scenario.tracking_error <= 0 or scenario.half_life <= 0 or not 0 < scenario.daily_participation <= 100:
+            raise ValueError("Baseline AUM must be at least $500m; tracking error and half-life must be positive; daily participation must be in (0, 100].")
+        if min(scenario.gross_alpha, scenario.annual_cost_bps, scenario.cost_elasticity) < 0:
+            raise ValueError("Gross alpha, annual cost and cost elasticity cannot be negative.")
+        if trades is not None:
+            tape = validate_trades(trades)
+            self.x = (tape.q / tape.adv).to_numpy()
+            notionals = tape.q.to_numpy()
+            counts = np.ones(len(tape))
+            self.source = "trade-csv"
+        else:
+            frame = (BUCKETS if buckets is None else buckets).copy()
+            validate_buckets(frame)
+            self.x = frame.p.to_numpy(float)
+            notionals = frame.valueUsdMillion.to_numpy(float)
+            counts = frame.trades.to_numpy(float)
+            self.source = "bucket-representatives"
+        if not np.isfinite(self.x).all() or not np.isfinite(notionals.sum()) or not np.isfinite(counts.sum()):
+            raise ValueError("Order ratios and total weights must be finite.")
+        self.weights = notionals / notionals.sum()
+        self.count_weights = counts / counts.sum()
+        self.base_capture = float(np.dot(self.weights, alpha_capture(self.x / (scenario.daily_participation / 100), scenario.half_life)))
+        if self.base_capture <= 0:
+            raise ValueError("Baseline alpha capture must be positive.")
+
+    def metric(self, aum_bn: float) -> dict:
+        if not np.isfinite(aum_bn) or aum_bn < MIN_AUM:
+            raise ValueError("Scenario AUM must be finite and at least $500m.")
+        s = aum_bn / self.p.aum0
+        days = s * self.x / (self.p.daily_participation / 100)
+        raw = float(np.dot(self.weights, alpha_capture(days, self.p.half_life)))
+        h = raw / self.base_capture
+        gross = self.p.gross_alpha * h
+        cost = self.p.annual_cost_bps * s ** self.p.cost_elasticity
+        net = gross - cost / 100
+        return {
+            "AUM": aum_bn, "AUM multiple": s,
+            "Alpha capture (%)": 100 * h, "Absolute capture (%)": 100 * raw,
+            "After delay (%)": gross, "Annual drag (bp)": cost,
+            "Net alpha (%)": net, "Net IR": net / self.p.tracking_error,
+            "Retained alpha (%)": 100 * net / self.p.gross_alpha if self.p.gross_alpha else np.nan,
+            "Average days": float(np.dot(self.weights, days)),
+            "Multi-day (%)": float(100 * np.dot(self.weights, days > 1)),
+            "Multi-day count (%)": float(100 * np.dot(self.count_weights, days > 1)),
+            "Mean order/ADV (%)": float(100 * np.dot(self.weights, s * self.x)),
+        }
+
+    def contributions(self, aum_bn: float) -> pd.DataFrame:
+        self.metric(aum_bn)
+        s = aum_bn / self.p.aum0
+        days = self.x * s / (self.p.daily_participation / 100)
+        return pd.DataFrame({"Baseline order/ADV": self.x, "Notional weight": self.weights,
+                             "Execution days": days, "Absolute capture": alpha_capture(days, self.p.half_life)})
+
+    def capacity(self, minimum_ir: float, maximum: float) -> float | None:
+        """First threshold crossing from $500m; bounded by chart horizon."""
+        if not np.isfinite(maximum) or maximum < MIN_AUM:
+            raise ValueError("Capacity horizon must be finite and at least $500m.")
+        if self.metric(MIN_AUM)["Net IR"] <= minimum_ir:
+            return MIN_AUM
+        if self.metric(maximum)["Net IR"] > minimum_ir:
+            return None
+        lo, hi = MIN_AUM, maximum
+        for _ in range(60):
             mid = (lo + hi) / 2
-            if expectation(mid) < mean:
+            if self.metric(mid)["Net IR"] > minimum_ir:
                 lo = mid
             else:
                 hi = mid
-        frame["count"] = weights((lo + hi) / 2) * b.trades
-        frame["bucket"] = bucket
-        rows.extend(frame[["adv", "ticket", "count", "bucket"]].to_dict("records"))
-    return pd.DataFrame(rows)
+        return hi
 
 
-def alpha_capture(days: np.ndarray | float, half_life: float) -> np.ndarray:
-    d = np.asarray(days, dtype=float)
-    decay = np.log(2) / max(half_life, 0.01)
-    return -np.expm1(-decay * d) / (d * -np.expm1(-decay))
+def curve(engine: ExecutionEngine, maximum: float, uncertainty: bool = True) -> pd.DataFrame:
+    if maximum < engine.p.aum0:
+        raise ValueError("Chart horizon must be at least current AUM.")
+    grid = np.unique(np.r_[np.linspace(MIN_AUM, maximum, 121), engine.p.aum0])
+    result = pd.DataFrame([engine.metric(float(a)) for a in grid])
+    if uncertainty and isinstance(engine, MonteCarloEngine):
+        result = pd.concat([result, engine.intervals(grid)], axis=1)
+    return result
 
 
-class AdvEngine:
-    def __init__(
-        self,
-        scenario: Scenario,
-        orders: pd.DataFrame,
-        buckets: pd.DataFrame | None = None,
-        anchor_aum: float = HISTORICAL_AUM / 1e9,
-        anchor_holdings: int = HISTORICAL_HOLDINGS,
-        impact_reference: tuple[float, float, float] | None = None,
-    ):
-        self.p = scenario
-        self.orders = orders
-        self.buckets = (BUCKETS if buckets is None else buckets).reset_index(drop=True)
-        self.anchor_aum = max(float(anchor_aum), 0.0001)
-        self.anchor_holdings = max(int(anchor_holdings), 1)
-        self.base_value = float((self.buckets.valueUsdMillion * 1e6).sum())
-        self.historical_turnover = self.base_value / (2 * self.anchor_aum * 1e9)
-        self.rho = max(scenario.daily_participation / 100, 0.0001)
-        observed_participation = self.orders.ticket.to_numpy() / self.orders.adv.to_numpy()
-        self.daily_capacity = np.maximum(self.rho, observed_participation)
-        self.horizon = max(1, int(scenario.max_days))
-        self.impact_reference = impact_reference or (
-            scenario.impact_a, scenario.impact_b, scenario.impact_gamma,
-        )
-        base = self._distribution(scenario.aum0)
-        self.base_alpha = max(base["alpha_raw"], 1e-12)
-        observed = float(np.average(self.buckets.cost, weights=self.buckets.valueUsdMillion))
-        reference = self._distribution(scenario.aum0, self.impact_reference)
-        self.cost_scale = observed / max(reference["cost_raw"], 1e-12)
+class MonteCarloEngine(ExecutionEngine):
+    """IID parent-order bootstrap, conditional on observed/proxy orders.
 
-    def _execution(
-        self,
-        participation: np.ndarray,
-        impact_parameters: tuple[float, float, float] | None = None,
-    ) -> tuple[np.ndarray, ...]:
-        required = np.maximum(
-            1, np.ceil(participation / self.daily_capacity - 1e-12),
-        ).astype(int)
-        days = np.minimum(
-            self.horizon, np.maximum(1.0, participation / self.daily_capacity),
-        )
-        fraction = np.minimum(
-            1, self.horizon * self.daily_capacity / np.maximum(participation, 1e-12),
-        )
-        alpha = fraction * alpha_capture(days, self.p.half_life)
-        a, b, gamma = impact_parameters or (
-            self.p.impact_a, self.p.impact_b, self.p.impact_gamma,
-        )
-        cost = a + b * np.minimum(participation, self.daily_capacity) ** gamma
-        return required, days, fraction, alpha, cost
+    Store only mean weights, not a samples-by-orders matrix. Replaying the seed
+    yields identical books for uncertainty ranges and all AUM checkpoints.
+    """
+    def __init__(self, scenario: Scenario, buckets=None, trades=None, samples=2000, seed=2026):
+        super().__init__(scenario, buckets, trades)
+        if isinstance(samples, bool) or not isinstance(samples, (int, np.integer)) or not 2 <= samples <= 20000:
+            raise ValueError("Monte Carlo samples must be an integer between 2 and 20,000.")
+        if isinstance(seed, bool) or not isinstance(seed, (int, np.integer)) or not 0 <= seed <= 2**32-1:
+            raise ValueError("Random seed must be an integer between 0 and 4,294,967,295.")
+        self.samples, self.seed = int(samples), int(seed)
+        if trades is not None:
+            tape = validate_trades(trades)
+            self.book_size = len(tape)
+            self.unit_notional = tape.q.to_numpy(float)
+        else:
+            frame = BUCKETS if buckets is None else buckets
+            counts = frame.trades.to_numpy(float)
+            value = frame.valueUsdMillion.to_numpy(float)
+            if np.any((counts > 0) != (value > 0)):
+                raise ValueError("Monte Carlo buckets require positive traded value exactly where order counts are positive.")
+            self.book_size = max(1, int(round(counts.sum())))
+            self.unit_notional = np.divide(value, counts, out=np.zeros_like(value), where=counts > 0)
+        self.order_notional_usd = self.unit_notional.copy() * (1 if trades is not None else 1e6)
+        self.unit_notional = self.unit_notional / self.unit_notional.max()
+        self.probabilities = self.count_weights.copy()
+        mean_weights = np.zeros_like(self.x)
+        mean_counts = np.zeros_like(self.x)
+        self.effective_weights = np.zeros_like(self.x)
+        base_g = alpha_capture(self.x / (scenario.daily_participation/100), scenario.half_life)
+        for weights, counts in self._books():
+            g0 = weights @ base_g
+            mean_weights += weights.sum(axis=0) / self.samples
+            mean_counts += counts.sum(axis=0) / self.samples
+            self.effective_weights += (weights / g0[:, None]).sum(axis=0) / self.samples
+        self.weights = mean_weights
+        self.count_weights = mean_counts
 
-    def _distribution(
-        self,
-        aum_bn: float,
-        impact_parameters: tuple[float, float, float] | None = None,
-    ) -> dict:
-        holdings = min(max(self.p.holdings, 1), max(self.p.universe_size, 1))
-        aum_ratio = max(aum_bn, 0.0001) / self.anchor_aum
-        size = aum_ratio * self.anchor_holdings / holdings
-        frequency = holdings / self.anchor_holdings * max(self.p.turnover, 0) / 100 / self.historical_turnover
-        ticket = self.orders.ticket.to_numpy() * size
-        liquidity_factor = aum_ratio ** -max(self.p.liquidity_deterioration, 0.0)
-        adv = self.orders.adv.to_numpy() * max(self.p.adv_volume, 0.01) / 100 * liquidity_factor
-        count = self.orders["count"].to_numpy() * frequency
-        participation = ticket / adv
-        bucket = np.searchsorted(self.buckets.upper.to_numpy(), participation, side="left")
-        counts = np.bincount(bucket, weights=count, minlength=len(self.buckets) + 1)
-        values = np.bincount(bucket, weights=ticket * count, minlength=len(self.buckets) + 1)
-        required, _, fraction, alpha, cost = self._execution(participation, impact_parameters)
-        historical_weights = self.orders.ticket.to_numpy() * self.orders["count"].to_numpy() / self.base_value
-        count_total = float(count.sum())
-        average_execution_days = (
-            float(np.dot(count, participation / self.daily_capacity) / count_total)
-            if count_total else 0.0
-        )
-        order = np.argsort(participation)
-        cumulative_notional = np.cumsum(historical_weights[order])
-        p90_index = min(int(np.searchsorted(cumulative_notional, 0.90, side="left")), len(order) - 1)
-        p90_participation = float(participation[order[p90_index]])
-        return {
-            "counts": counts, "values": values,
-            "alpha_raw": float(np.dot(historical_weights, alpha)),
-            "cost_raw": float(np.dot(historical_weights, fraction * cost)),
-            "avg_days": average_execution_days,
-            "multi": float(np.dot(historical_weights, required >= 2)),
-            "three": float(np.dot(historical_weights, required >= 3)),
-            "mean_participation": float(np.dot(historical_weights, participation)),
-            "p90_participation": p90_participation,
-            "notional_above_10": float(np.dot(historical_weights, participation > 0.10)),
-            "notional_above_25": float(np.dot(historical_weights, participation > 0.25)),
-            "unfinished": float(np.dot(historical_weights, 1 - fraction)),
-            "required": required, "count_weights": count,
-        }
+    def _books(self):
+        rng = np.random.default_rng(self.seed)
+        batch = max(1, min(128, 500000 // len(self.x)))
+        for start in range(0, self.samples, batch):
+            counts = rng.multinomial(self.book_size, self.probabilities, size=min(batch, self.samples-start))
+            dollars = counts * self.unit_notional
+            weights = dollars / dollars.sum(axis=1, keepdims=True)
+            yield weights, counts / self.book_size
 
-    @staticmethod
-    def _shares(values: np.ndarray) -> np.ndarray:
-        return values / values.sum() * 100 if values.sum() else np.zeros_like(values)
+    def metric(self, aum_bn):
+        result = super().metric(aum_bn)
+        s = aum_bn / self.p.aum0
+        g = alpha_capture(s*self.x/(self.p.daily_participation/100), self.p.half_life)
+        h = 1.0 if s == 1 else float(np.dot(self.effective_weights, g))
+        gross = self.p.gross_alpha*h
+        net = gross-result['Annual drag (bp)']/100
+        result.update({'Alpha capture (%)':100*h, 'After delay (%)':gross,
+                       'Net alpha (%)':net, 'Net IR':net/self.p.tracking_error,
+                       'Retained alpha (%)':100*net/self.p.gross_alpha if self.p.gross_alpha else np.nan})
+        return result
 
-    def metric(self, aum_bn: float) -> dict:
-        d = self._distribution(aum_bn)
-        impact = d["cost_raw"] * self.cost_scale
-        capture_pct = 100 * d["alpha_raw"] / self.base_alpha
-        implemented = self.p.gross_alpha * capture_pct / 100
-        annual_drag = 2 * self.p.turnover / 100 * impact
-        net_alpha = implemented - annual_drag / 100
-        return {
-            "AUM": aum_bn, "Impact (bp)": impact, "Annual drag (bp)": annual_drag,
-            "Alpha capture (%)": capture_pct, "After delay (%)": implemented,
-            "Net alpha (%)": net_alpha, "Net IR": net_alpha / max(self.p.tracking_error, 0.01),
-            "Retained alpha (%)": 100 * net_alpha / max(self.p.gross_alpha, 0.01),
-            "Average days": d["avg_days"], "Multi-day (%)": 100 * d["multi"],
-            "3+ days (%)": 100 * d["three"], "Mean participation (%)": 100 * d["mean_participation"],
-            "P90 participation (%)": 100 * d["p90_participation"],
-            "Notional above 10% ADV (%)": 100 * d["notional_above_10"],
-            "Notional above 25% ADV (%)": 100 * d["notional_above_25"],
-            "Unfinished notional (%)": 100 * d["unfinished"],
-            "Annual parent orders": float(d["counts"].sum()), "Annual value": float(d["values"].sum()),
-        }
+    def sampled_book(self, index: int, aum_bn: float) -> pd.DataFrame:
+        """Inspect one of the exact seeded books used by the capacity calculation."""
+        if isinstance(index, bool) or not isinstance(index, (int, np.integer)) or not 0 <= index < self.samples:
+            raise ValueError("Sample index must be an integer within the simulation count.")
+        self.metric(aum_bn)  # Common AUM-domain validation.
+        start = 0
+        for weights, counts in self._books():
+            if index < start + len(weights):
+                row = index-start
+                number = np.rint(counts[row]*self.book_size).astype(int)
+                s = aum_bn/self.p.aum0
+                days = self.x*s/(self.p.daily_participation/100)
+                return pd.DataFrame({
+                    "Baseline order/ADV": self.x,
+                    "Order/ADV at selected AUM": self.x*s,
+                    "Sampled orders": number,
+                    "Sampled notional (USD)": number*self.order_notional_usd*s,
+                    "Sampled notional weight": weights[row],
+                    "Execution days": days,
+                    "Absolute capture": alpha_capture(days,self.p.half_life),
+                })
+            start += len(weights)
+        raise RuntimeError("Sampled book was not generated.")
 
-    def dollar_shares(self, aum_bn: float) -> np.ndarray:
-        return self._shares(self._distribution(aum_bn)["values"])
+    def impact_samples(self, aums, a, b, gamma):
+        """Dollar-weighted power-law costs for the same seeded bootstrap books."""
+        from impact_cost import impact_bps
+        aums=np.asarray(aums,float)
+        if not np.isfinite(aums).all() or np.any(aums<MIN_AUM):
+            raise ValueError("Impact scenarios must start at $500m.")
+        # Bound the temporary orders-by-AUM kernel for large actual-order tapes.
+        samples=np.empty((self.samples,len(aums)))
+        width=max(1,min(16,500000//len(self.x)))
+        for j in range(0,len(aums),width):
+            costs=impact_bps(self.x[:,None]*(aums[None,j:j+width]/self.p.aum0),a,b,gamma)
+            start=0
+            for weights,_ in self._books():
+                samples[start:start+len(weights),j:j+width] = weights @ costs
+                start+=len(weights)
+        return samples
 
-    def count_shares(self, aum_bn: float) -> np.ndarray:
-        return self._shares(self._distribution(aum_bn)["counts"])
-
-    def execution_shares(self, aum_bn: float) -> np.ndarray:
-        d = self._distribution(aum_bn)
-        required, weights = d["required"], d["count_weights"]
-        groups = np.array([
-            weights[required == 1].sum(),
-            weights[(required >= 2) & (required <= 5)].sum(),
-            weights[(required >= 6) & (required <= self.horizon)].sum(),
-            weights[required > self.horizon].sum(),
-        ])
-        return self._shares(groups)
+    def intervals(self, aums):
+        aums = np.asarray(aums, float)
+        if not np.isfinite(aums).all() or np.any(aums < MIN_AUM):
+            raise ValueError("Scenario AUM must be finite and at least $500m.")
+        multiples = aums/self.p.aum0
+        ratios = np.empty((self.samples, len(aums)))
+        base_g = alpha_capture(self.x/(self.p.daily_participation/100), self.p.half_life)
+        start = 0
+        for weights, _ in self._books():
+            g0 = weights @ base_g
+            for j in range(0, len(aums), 16):
+                kernel = alpha_capture(self.x[:,None]*multiples[None,j:j+16]/(self.p.daily_participation/100), self.p.half_life)
+                ratios[start:start+len(weights),j:j+16] = (weights @ kernel)/g0[:,None]
+            start += len(weights)
+        ratios[:,multiples == 1] = 1.0
+        lo, hi = np.quantile(ratios, [.05,.95], axis=0)
+        cost = self.p.annual_cost_bps*multiples**self.p.cost_elasticity/100
+        alpha_lo, alpha_hi = self.p.gross_alpha*lo-cost, self.p.gross_alpha*hi-cost
+        return pd.DataFrame({'Alpha capture P05 (%)':100*lo, 'Alpha capture P95 (%)':100*hi,
+                             'Net alpha P05 (%)':alpha_lo, 'Net alpha P95 (%)':alpha_hi,
+                             'Net IR P05':alpha_lo/self.p.tracking_error, 'Net IR P95':alpha_hi/self.p.tracking_error})
 
 
-def burr_cdf(x: float, c: float, d: float, scale: float) -> float:
-    if x <= 0:
-        return 0.0
-    if not np.isfinite(x):
-        return 1.0
-    return float(1 - (1 + (x / max(scale, 1e-12)) ** c) ** -d)
-
-
-def burr_ppf(q: np.ndarray, c: float, d: float, scale: float) -> np.ndarray:
-    return scale * ((1 - q) ** (-1 / d) - 1) ** (1 / c)
-
-
-def burr_shares(
-    aum_bn: float,
-    scenario: Scenario,
-    count_fit: bool = False,
-    eta: float | None = None,
-    kappa: float | None = None,
-    buckets: pd.DataFrame | None = None,
-) -> np.ndarray:
-    fit = LIVE["countCalibration"] if count_fit else {"burrC": scenario.burr_c, "burrD": scenario.burr_d, "burrScale": scenario.burr_scale, "scaleElasticity": scenario.scale_elasticity, "tailElasticity": scenario.tail_elasticity}
-    ratio = aum_bn / scenario.aum0
-    e = fit["scaleElasticity"] if eta is None else eta
-    k = fit["tailElasticity"] if kappa is None else kappa
-    scale = fit["burrScale"] * ratio ** e
-    d = fit["burrD"] * ratio ** -k
-    bucket_data = BUCKETS if buckets is None else buckets
-    edges = [0, *bucket_data.upper.tolist(), np.inf]
-    return np.array([(burr_cdf(edges[i + 1], fit["burrC"], d, scale) - burr_cdf(edges[i], fit["burrC"], d, scale)) * 100 for i in range(len(edges) - 1)])
-
-
-class BurrEngine:
-    def __init__(
-        self,
-        scenario: Scenario,
-        buckets: pd.DataFrame | None = None,
-        impact_reference: tuple[float, float, float] | None = None,
-    ):
-        self.p = scenario
-        self.buckets = (BUCKETS if buckets is None else buckets).reset_index(drop=True)
-        self.q = (np.arange(700) + 0.5) / 700
-        self.base = burr_ppf(self.q, scenario.burr_c, scenario.burr_d, scenario.burr_scale)
-        self.base_days = np.minimum(
-            scenario.max_days,
-            np.maximum(1.0, self.base / (scenario.daily_participation / 100)),
-        )
-        self.base_capture = alpha_capture(self.base_days, scenario.half_life)
-        observed = float(np.average(self.buckets.cost, weights=self.buckets.share))
-        self.impact_reference = impact_reference or (
-            scenario.impact_a, scenario.impact_b, scenario.impact_gamma,
-        )
-        raw = np.mean(self._cost(self.base, self.impact_reference))
-        self.impact_scale = observed / max(raw, 1e-12)
-
-    def _cost(
-        self,
-        participation: np.ndarray,
-        impact_parameters: tuple[float, float, float] | None = None,
-    ) -> np.ndarray:
-        a, b, gamma = impact_parameters or (
-            self.p.impact_a, self.p.impact_b, self.p.impact_gamma,
-        )
-        return a + b * np.maximum(0, participation) ** gamma
-
-    def metric(self, aum_bn: float) -> dict:
-        ratio = max(aum_bn, 0.01) / max(self.p.aum0, 0.01)
-        scale = self.p.burr_scale * ratio ** self.p.scale_elasticity
-        d = self.p.burr_d * ratio ** -self.p.tail_elasticity
-        participation = burr_ppf(self.q, self.p.burr_c, d, scale)
-        continuous_days = np.minimum(
-            self.p.max_days,
-            np.maximum(1.0, participation / (self.p.daily_participation / 100)),
-        )
-        required = np.maximum(
-            1, np.ceil(participation / (self.p.daily_participation / 100) - 1e-12),
-        ).astype(int)
-        effective = participation * self.base_days / continuous_days
-        impact = float(np.mean(self._cost(effective)) * self.impact_scale)
-        capture_pct = float(np.mean(alpha_capture(continuous_days, self.p.half_life) / self.base_capture) * 100)
-        implemented = self.p.gross_alpha * capture_pct / 100
-        annual_drag = 2 * self.p.turnover / 100 * impact
-        net_alpha = implemented - annual_drag / 100
-        return {
-            "AUM": aum_bn, "Impact (bp)": impact, "Annual drag (bp)": annual_drag,
-            "Alpha capture (%)": capture_pct, "After delay (%)": implemented,
-            "Net alpha (%)": net_alpha, "Net IR": net_alpha / max(self.p.tracking_error, .01),
-            "Retained alpha (%)": 100 * net_alpha / max(self.p.gross_alpha, .01),
-            "Average days": float(np.mean(participation / (self.p.daily_participation / 100))),
-            "Multi-day (%)": float((required >= 2).mean() * 100),
-            "3+ days (%)": float((required >= 3).mean() * 100), "Mean participation (%)": float(participation.mean() * 100),
-            "P90 participation (%)": float(np.quantile(participation, 0.90) * 100),
-            "Notional above 10% ADV (%)": float((participation > 0.10).mean() * 100),
-            "Notional above 25% ADV (%)": float((participation > 0.25).mean() * 100),
-            "Unfinished notional (%)": 0.0,
-        }
-
-    def dollar_shares(self, aum_bn: float) -> np.ndarray:
-        return burr_shares(aum_bn, self.p, buckets=self.buckets)
-
-
-def curve(engine, maximum: float) -> pd.DataFrame:
-    return pd.DataFrame([engine.metric(max(0.1, maximum * (i + 1) / 61)) for i in range(61)])
+def create_engine(scenario, buckets=None, trades=None, mode='Monte Carlo', samples=2000, seed=2026):
+    if mode == 'Monte Carlo':
+        return MonteCarloEngine(scenario, buckets, trades, samples, seed)
+    if mode == 'Deterministic':
+        return ExecutionEngine(scenario, buckets, trades)
+    raise ValueError("Calculation mode must be Monte Carlo or Deterministic.")
