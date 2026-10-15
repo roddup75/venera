@@ -184,3 +184,15 @@ In Monte Carlo mode, the same seeded order book prices $C_r(A)$ and its own $C_r
 The empirical dashboard defaults to Deterministic mode: the calibrated central curve is shown without confidence intervals, using observed order weights. Select Monte Carlo in Capacity Lab to add the conditional 5th–95th percentile intervals described above. Simulation count and seed are set in ADV bucket sampler. The selected mode is saved with the strategy; explicitly saved Monte Carlo settings are preserved when reloaded. Sampler book inspection remains stochastic in either mode.
 
 All displayed numeric tables use at most two decimal places; integer count columns may omit decimals. Order/ADV ratios and notional weights are displayed as percentages to preserve readability for small fractions. Editable bucket ratio columns also use percent units and are converted back to fractions internally. Calculations, stored strategy values and CSV exports retain full precision.
+
+**16. What Monte Carlo samples and the alpha assumption**
+
+Monte Carlo samples are alternative trading books and congestion outcomes. The implementation does not draw an individual alpha forecast for each trade or assume a normal distribution of trade alpha. The supplied alpha-decay curve maps the simulated multi-day trade percentage into portfolio IR.
+
+The decay calibration treats parent orders as exchangeable for congestion purposes: small and large orders count equally toward the percentage taking more than one day. It ignores trade-level differences in predictive alpha and delay sensitivity. This is a count-based approximation, rather than an explicit allocation of equal alpha dollars to every order. Impact costs are aggregated separately using traded-notional weights.
+
+- **Bucket-input sampling:** $N=\operatorname{round}(\sum_b n_b)$ orders per book, with $(m_1,\ldots,m_B)\sim\operatorname{Multinomial}(N;P_1,\ldots,P_B)$ and $P_b=n_b/\sum_j n_j$. Each proxy order uses the bucket representative order/ADV and average notional $Q_b/n_b$. Counts vary; no continuous within-bucket order/ADV distribution is currently sampled.
+- **Actual-trade sampling:** an empirical bootstrap draws $N$ observed orders uniformly with replacement and retains complete $(q,ADV)$ pairs. Equal selection probability does not establish equal alpha contribution.
+- **Congestion sampling:** independently of cost-book sampling, $K(A)\sim\operatorname{Binomial}(N,p(A))$, where $p(A)$ is the calibrated multi-day fraction. The sampled percentage $100K(A)/N$ is passed through the alpha-to-IR curve. Order indicators are independent with the same conditional probability $p(A)$. TC retention and calibration parameters remain fixed.
+
+Dependence between sampled impact-cost composition and alpha loss is omitted. In reality, difficult-to-execute trades may carry unusually high or low alpha. Conditional percentile bands exclude this dependence and calibration uncertainty. More samples improve numerical precision without increasing trades per book or resolving these omitted uncertainties. The seed makes the draws reproducible.
