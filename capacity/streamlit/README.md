@@ -33,9 +33,9 @@ Daily participation is an execution-time reference in alpha calibration, not an 
 
 ## Annual sampling and monthly rebalancing
 
-The confirmed saved percentiles in `data/universe-adv-data.json` approximate 300 stock ADVs by log-dollar interpolation at midpoint stock ranks. Select stocks uniformly with replacement for 971 equal-ticket annual orders. Each ticket is `2 * annual_turnover_fraction * AUM_USD / annual_orders`. Annual count and turnover are annual inputs; the strategy rebalances monthly. The inspected book can be exported as 12 monthly books while preserving annual stock counts and notional. Fixed ADV and independent selections make calendar grouping neutral for annual costs.
+The saved percentiles in `data/universe-adv-data.json` approximate 300 stock ADVs by log-dollar interpolation at midpoint ranks. Historical bucket counts fix annual composition (971 orders by default). A bucket ticket is `2 * annual_turnover_fraction * AUM_USD * bucket_value_share / bucket_order_count`. Within each bucket, draw uniformly with replacement among stocks whose ticket/ADV fits its bounds. This preserves both historical count and notional shares at current AUM; tickets differ across buckets. Custom annual counts use largest-remainder allocation with at least one order per populated bucket. Infeasible inputs raise errors. Zero turnover gives zero tickets and drag, without baseline bucket matching.
 
-Historical bucket frequencies are diagnostic comparisons, not sampling probabilities or calibration targets. Actual-order CSV mode bootstraps complete q/ADV pairs and uses their actual notionals. The same sampled selections are reused across AUM; tickets scale, ADV stays fixed. Migration charts compare current AUM, ×2 and ×3, retaining an overflow bucket.
+Counts and turnover are annual. Monthly books preserve annual bucket/stock counts and ticket sizes. Actual CSV mode bootstraps complete q/ADV pairs. Reuse the same stock selections across AUM, scaling tickets with ADV fixed. Migration charts show mean frequencies across simulated books at current AUM, ×2 and ×3, including overflow. Daily participation does not cap bucket assignment.
 
 ## Capacity uncertainty
 
@@ -45,7 +45,7 @@ Keep unreached paths as right-censored beyond the horizon/model domain. The empi
 
 ## Persistence and checks
 
-Private cases remain in `data/strategies.user.json` (never committed). Old cases retain parameters and inputs but load into the one combined model. Saving uses `three-pillar-current-gross-v4`. Inputs missing universe percentiles receive the confirmed default distribution; loading does not rewrite the private file. Tables display up to two decimals; calculations, saves and CSVs retain precision.
+Private cases remain in `data/strategies.user.json` (never committed). Old cases retain parameters and inputs but load into the one combined model. Saving uses `three-pillar-calibrated-books-v5`. Inputs missing universe percentiles receive the confirmed default distribution; loading does not rewrite the private file. Tables display up to two decimals; calculations, saves and CSVs retain precision.
 
 ```sh
 .venv/bin/python -m unittest discover -s . -p 'test_*.py'

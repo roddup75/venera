@@ -11,7 +11,7 @@ import streamlit as st
 from capacity_model import Scenario, MIN_AUM, validate_trades
 from empirical_model import EmpiricalIRModel
 from universe_sampler import create_liquidity_engine, ADV_POINTS
-from bucket_sampler import bucket_migration
+from bucket_sampler import bucket_migration, mean_bucket_migration
 from impact_cost import fit_impact_cost, impact_bps, impact_curve
 from transfer_coefficient import TransferCoefficientModel
 from alpha_decay import AlphaDecayModel
@@ -225,7 +225,7 @@ with inputs:
     source = st.radio("Order input source", source_options,
                       index=1 if selected_strategy.get("trades") else 0,
                       key=main_key+"source", horizontal=True)
-    st.caption("The universe sampler selects stocks uniformly with replacement and gives every order equal absolute notional. Historical buckets provide impact-cost calibration and comparison data; they do not determine simulated bucket frequencies. Trade CSV remains available for actual orders.")
+    st.caption("The universe sampler preserves current-AUM historical bucket counts and traded-value shares. It samples compatible stock ADVs within each bucket, with one ticket size per bucket. Trade CSV remains available for actual orders.")
     universe_controls=st.columns(2)
     universe_size=int(universe_controls[0].number_input("Stocks in universe",1,10000,int(saved.get("universe_size",300)),1,key=main_key+"universe_size",disabled=source=="Trade CSV"))
     annual_trades=int(universe_controls[1].number_input("Annual parent orders (12 monthly rebalances)",1,1000000,int(saved.get("annual_trades",971)),1,key=main_key+"annual_trades",disabled=source=="Trade CSV"))
@@ -279,7 +279,7 @@ with execution:
     ])
     demo_key = main_key+"pillars::"
     with sampler_tab:
-        st.write("Universe ADV → equal-notional parent orders → ADV bucket migration → estimated impact costs.")
+        st.write("Historical bucket counts and values → compatible stock ADV sampling → trade migration → estimated impact costs.")
         controls=st.columns(3)
         demo_samples=controls[0].number_input("Sampler Monte Carlo samples",2,20000,int(mc_samples),100,key=demo_key+"samples",help="Number of simulated annual books. Universe mode uses the annual order-count input; CSV mode uses the observed row count.")
         demo_seed=controls[1].number_input("Sampler random seed",0,2**32-1,int(mc_seed),1,key=demo_key+"seed")
@@ -295,7 +295,7 @@ with execution:
         sample_aum=st.number_input("Sampler AUM (USD bn)",min_value=MIN_AUM,max_value=float(max_aum),step=.1,key=sample_aum_key,
                                    help="Preview defaults to current AUM. Universe order size = 2 × turnover fraction × AUM / annual order count; stock ADV stays fixed.")
         st.caption(f"Order-size baseline: current AUM (${aum0:g}bn). Preview order sizes are scaled by {sample_aum/aum0:.2f}×. Calculations start at $0.5bn; gross alpha is anchored at current AUM.")
-        st.caption("Universe mode samples stocks uniformly with replacement. Every order has the same absolute notional: 2 × one-way turnover fraction × AUM / annual parent-order count. Trade CSV mode resamples complete observed orders. ADV stays fixed as AUM grows.")
+        st.caption("Universe mode fixes annual counts by historical bucket and allocates total turnover using historical traded-value shares. Each bucket has its own ticket size. Stocks are drawn uniformly with replacement among compatible ADVs. Trade CSV mode resamples complete observed orders. ADV stays fixed as AUM grows.")
         mc_samples=int(demo_samples)
         mc_seed=int(demo_seed)
         try:
@@ -305,8 +305,9 @@ with execution:
             st.error(f"Check sampler inputs: {error}")
             st.stop()
         if active_trades is None:
-            ticket=2*turnover/100*sample_aum*1e9/annual_trades
-            st.caption(f"Approximate universe: {universe_size:,} stocks · {annual_trades:,} orders per annual book · equal ticket at preview AUM: ${ticket:,.2f}. Total traded notional reconciles exactly to turnover in every simulated book.")
+            st.caption(f"Approximate universe: {universe_size:,} stocks · {annual_trades:,} orders per annual book. Bucket-specific ticket sizes preserve historical traded-value shares and reconcile exactly to annual turnover.")
+            if turnover == 0:
+                st.info("Zero turnover: all tickets and impact drag are zero. Historical bucket matching applies only when trading is positive.")
         sample_key=demo_key+"book"
         if sample_key in st.session_state and st.session_state[sample_key]>int(demo_samples):
             st.session_state[sample_key]=int(demo_samples)
@@ -324,7 +325,7 @@ with execution:
         c3.metric("Sampled traded notional",f"USD {book['Sampled notional (USD)'].sum()/1e6:,.2f}m")
         st.subheader("Trade migration across ADV buckets")
         try:
-            migration,_=bucket_migration(book,active_buckets,aum0)
+            migration,_=mean_bucket_migration(sampler,active_buckets,aum0)
         except (ValueError,KeyError,TypeError) as error:
             st.warning(f"Bucket migration cannot be shown: {error}")
         else:
@@ -336,15 +337,15 @@ with execution:
                        category_orders={'Bucket':migration[migration.Stage==0].Bucket.tolist(),
                                         'AUM scenario':list(scenario_names.values())},
                        custom_data=['Trades','AUM (USD bn)'])
-            fig.update_traces(hovertemplate="ADV bucket: %{x}<br>Frequency: %{y:.2f}%<br>Trades: %{customdata[0]:,}<br>AUM: $%{customdata[1]:g}bn<extra>%{fullData.name}</extra>")
+            fig.update_traces(hovertemplate="ADV bucket: %{x}<br>Frequency: %{y:.2f}%<br>Mean trades: %{customdata[0]:,.2f}<br>AUM: $%{customdata[1]:g}bn<extra>%{fullData.name}</extra>")
             fig.update_layout(xaxis_title='ADV bucket (parent order/ADV)',yaxis_title='Trade frequency (%)')
             fig.update_yaxes(range=[0,100],ticksuffix='%')
             st.plotly_chart(style_figure(fig),width="stretch")
-            st.caption(f"Same simulated book #{int(sample_id)} at all three levels: {int(book['Sampled orders'].sum()):,} parent orders, seed {int(demo_seed)}. Bars show the percentage of trades in each bucket. Order sizes grow with AUM; ADV stays fixed. Current means the Capacity Lab current AUM, independently of Sampler AUM and chart horizon.")
-            st.caption("Buckets include their lower bound and exclude their upper bound. An overflow bucket retains orders at or above the highest boundary. Universe mode derives participation from equal tickets and stock ADV; CSV mode uses actual order/ADV pairs.")
+            st.caption(f"Mean across {int(demo_samples):,} simulated annual books, each with {sampler.book_size:,} orders; seed {int(demo_seed)}. Each book reuses its stock selections at all three AUM levels. Order sizes grow with AUM; ADV stays fixed. Current means the Capacity Lab current AUM, independently of Sampler AUM and chart horizon.")
+            st.caption("Buckets include their lower bound and exclude their upper bound. An overflow bucket retains orders at or above the highest boundary. Universe mode derives participation from calibrated bucket tickets and sampled stock ADV; CSV mode uses actual order/ADV pairs.")
             with st.expander("Bucket migration data"):
                 display_table(migration[['Scenario','AUM (USD bn)','Bucket','Trades','Trade share (%)']],hide_index=True,width="stretch")
-                st.download_button("Export bucket migration CSV",migration.assign(book_number=int(sample_id),seed=int(demo_seed)).to_csv(index=False),"bucket_migration.csv","text/csv")
+                st.download_button("Export bucket migration CSV",migration.assign(monte_carlo_samples=int(demo_samples),seed=int(demo_seed)).to_csv(index=False),"bucket_migration.csv","text/csv")
         try:
             impact_fit=fit_impact_cost(active_buckets,"cost")
         except (ValueError,KeyError,TypeError) as error:
@@ -362,7 +363,7 @@ with execution:
             metrics[1].metric("Sampled weighted impact",f"{sampled_average:.2f} bp")
             metrics[2].metric("Sampled order impact cost",f"${book['Estimated impact cost (USD)'].sum():,.0f}")
             metrics[3].metric("Implied annual portfolio drag",f"{2*turnover/100*sampled_average:.2f} bp")
-            st.caption("Observed impact uses baseline traded-value weights. Sampled impact and dollar cost describe the selected book; annual drag uses the turnover assumption. Historical bucket frequencies are a comparison, not a calibration target for the universe sampler.")
+            st.caption("Observed impact uses baseline traded-value weights. Sampled impact and dollar cost describe the selected book; annual drag uses the turnover assumption. Current-AUM historical bucket counts and value shares calibrate the universe sampler.")
             plot_max=max(float(observed_x.max()),float(book['Order/ADV at selected AUM'].max()),.001)
             log_impact_axis=plot_max>10*float(observed_x.max())
             positive_x=np.r_[observed_x[observed_x>0],book.loc[book['Order/ADV at selected AUM']>0,'Order/ADV at selected AUM']]
@@ -397,7 +398,7 @@ with execution:
         with book_details:
             edges=active_buckets.upper.to_numpy(float)
             labels=active_buckets.label.astype(str).tolist()+[f">={edges[-1]*100:g}%"]
-            # Historical bucket observations are a diagnostic, not a sampling prior.
+            # Historical composition calibrates current-AUM counts and value shares.
             raw_counts=np.r_[active_buckets.trades.to_numpy(float),0.]
             raw_values=np.r_[active_buckets.valueUsdMillion.to_numpy(float)*1e6,0.]
             categories=np.searchsorted(edges,book['Order/ADV at selected AUM'].to_numpy(),side="right")
@@ -407,7 +408,7 @@ with execution:
             shares=pd.DataFrame({"ADV bucket":labels,
                 "Historical count share (%)":100*raw_counts/raw_counts.sum(),"Simulated count share (%)":100*sampled_counts/sampled_counts.sum(),
                 "Historical notional share (%)":100*raw_values/raw_values.sum(),"Simulated notional share (%)":100*sampled_values/total if total>0 else np.zeros(len(labels))})
-            st.caption("Historical buckets describe current AUM; simulated shares describe the selected preview AUM. Universe-mode total notional is fixed by turnover, and equal tickets make count shares equal notional shares. A mismatch with history exposes the uniform-selection/equal-ticket assumptions.")
+            st.caption("Historical buckets describe current AUM; simulated shares describe the selected preview AUM. Universe mode matches count and traded-value shares at current AUM by construction. Ticket sizes vary across buckets; at other AUM levels, the same orders migrate naturally. Total notional is fixed by turnover.")
             for columns,title in [(["Historical count share (%)","Simulated count share (%)"],"Historical vs simulated order counts"),(["Historical notional share (%)","Simulated notional share (%)"],"Historical vs simulated traded notional")]:
                 melted=shares.melt(id_vars="ADV bucket",value_vars=columns,var_name="Series",value_name="Share (%)")
                 fig=px.bar(melted,x="ADV bucket",y="Share (%)",color="Series",barmode="group",title=title,color_discrete_sequence=[GREEN,AMBER])
@@ -424,7 +425,7 @@ with execution:
                 monthly=sampler.monthly_book(int(sample_id)-1,float(sample_aum))
                 monthly_summary=monthly.groupby('Month',as_index=False).agg(
                     **{'Parent orders':('Parent orders','sum'),'Traded notional (USD)':('Traded notional (USD)','sum')})
-                st.caption("Monthly rebalance allocation of this same annual book. Order counts sum to the annual input; fixed ADV and equal tickets leave annual costs unchanged.")
+                st.caption("Monthly rebalance allocation of this same annual book. Order counts sum to the annual input; fixed ADV and unchanged bucket tickets leave annual costs unchanged.")
                 display_table(monthly_summary,hide_index=True,width="stretch")
                 st.download_button("Export monthly sampled book CSV",monthly.assign(seed=int(demo_seed),
                     book_number=int(sample_id)).to_csv(index=False),"monthly_sampled_book.csv","text/csv")
@@ -609,7 +610,7 @@ with overview:
         breakdown['Starting net IR']=engine.initial_ir
         st.caption("Starting net IR at $0.5bn is implied by the current-AUM gross-alpha anchor and baseline impact. Losses reconcile to net IR at each AUM.")
         display_table(breakdown[['AUM','Starting net IR','Alpha retention (%)','TC alpha retention (%)','Alpha-decay loss (IR)','TC loss (IR)','Incremental impact drag (bp)','Impact loss (IR)','Net IR','Net alpha (%)']],hide_index=True,width="stretch")
-    export=data.assign(methodology="three-pillar-current-gross-v4",model=model_kind,
+    export=data.assign(methodology="three-pillar-calibrated-books-v5",model=model_kind,
         alpha_points=json.dumps(alpha_points),tc_points=json.dumps(tc_points),tracking_error_pct=tracking_error,
         gross_alpha_anchor_pct=gross_alpha,gross_alpha_anchor_aum=aum0,one_way_turnover_pct=turnover,
         impact_a=engine.fit.a,impact_b=engine.fit.b,impact_gamma=engine.fit.gamma,
@@ -661,6 +662,9 @@ with summary:
         cells[2].metric("Capacity P80",percentile_display(capacity_uncertainty['P80']))
         cells[3].metric("Threshold reached within horizon",f"{capacity_uncertainty['Threshold reached (%)']:.2f}%")
         st.caption(f"Minimum net IR {minimum_ir:.2f}. The empirical P20–P80 range is the central 60% of stock-selection outcomes; alpha-decay and TC are fixed.")
+        lo,hi=capacity_uncertainty['P20'],capacity_uncertainty['P80']
+        if lo is not None and hi is not None and lo < hi and f"{lo:.2f}" == f"{hi:.2f}":
+            st.caption("The capacity range is narrower than $0.01bn; its endpoints round to the same displayed value. The histogram and CSV retain full precision.")
         if capacity_uncertainty['Censored simulations']:
             st.caption(f"{capacity_uncertainty['Censored simulations']:,} simulations remain beyond ${max_aum:.2f}bn and are included in the percentile calculation. The histogram shows reached crossings only.")
         st.download_button('Export simulated capacity crossings CSV',capacity_draws.assign(seed=int(mc_seed),uncertainty_source=uncertainty_source).to_csv(index=False),'simulated_capacity_crossings.csv','text/csv')

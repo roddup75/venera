@@ -24,7 +24,7 @@ class StrategyStoreTests(unittest.TestCase):
         self.assertEqual(saved['adv_points'],source['adv_points'])
         self.assertEqual(saved['ir_points'][1]['ir'],.31)
         self.assertEqual(saved['trades'], trades.to_dict('records'))
-        self.assertEqual(saved['methodology'],'three-pillar-current-gross-v4')
+        self.assertEqual(saved['methodology'],'three-pillar-calibrated-books-v5')
         engine=ExecutionEngine(Scenario(aum0=8), trades=pd.DataFrame(saved['trades']))
         self.assertEqual(engine.metric(8)['Alpha capture (%)'],100)
 

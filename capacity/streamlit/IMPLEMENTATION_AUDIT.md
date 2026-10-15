@@ -1,6 +1,6 @@
 # Methodology implementation audit
 
-**Historical snapshot:** this audit describes the 14 October execution-delay implementation, not the current default three-pillar model. As of 15 October, the default impact pillar samples equal-notional annual orders from a percentile-derived stock ADV universe; see METHODOLOGY.md and universe_sampler.py for current behavior.
+**Historical snapshot:** this audit describes the 14 October execution-delay implementation, not the current default three-pillar model. As of 15 October, the default impact pillar samples compatible stock ADVs conditional on historical bucket counts and bucket-specific ticket sizes; see METHODOLOGY.md and universe_sampler.py for current behavior.
 
 Reviewed 14 October 2026. Reference: **An Execution-Adjusted Transfer Coefficient Model for Equity Strategy Capacity**, Version 0.1, five pages, supplied as `capacity_methodology.pdf`.
 

@@ -10,7 +10,7 @@ from typing import Any
 
 import pandas as pd
 
-from universe_sampler import ADV_POINTS, validate_universe
+from universe_sampler import ADV_POINTS, validate_universe, calibrated_support
 from impact_cost import fit_impact_cost
 from transfer_coefficient import TransferCoefficientModel, DEFAULT_TC_POINTS
 from alpha_decay import AlphaDecayModel, DEFAULT_POINTS
@@ -145,6 +145,11 @@ def validate_strategy(
     if trades is not None:
         validate_trades(pd.DataFrame(trades))
     validate_universe(pd.DataFrame(adv_points), parameters["universe_size"], parameters["annual_trades"])
+    if trades is None:
+        from types import SimpleNamespace
+        calibrated_support(SimpleNamespace(aum0=parameters["aum0"]),bucket_frame,
+                           pd.DataFrame(adv_points),parameters["universe_size"],
+                           parameters["annual_trades"],parameters["turnover"])
 
     ir_frame = pd.DataFrame(
         DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records") if ir_points is None else ir_points,
@@ -190,7 +195,7 @@ def save_strategy(
         "ir_points": ir_records,
         "ir_points_source": "saved",
         "trades": trade_records,
-        "methodology": "three-pillar-current-gross-v4",
+        "methodology": "three-pillar-calibrated-books-v5",
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")

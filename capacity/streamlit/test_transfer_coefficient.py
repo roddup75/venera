@@ -41,4 +41,4 @@ class TransferCoefficientTests(unittest.TestCase):
             loaded=load_strategies(path)['TC']
             self.assertEqual(loaded['parameters']['tc_points'],params['tc_points'])
             self.assertEqual(loaded['parameters']['model_kind'],params['model_kind'])
-            self.assertEqual(loaded['methodology'],'three-pillar-current-gross-v4')
+            self.assertEqual(loaded['methodology'],'three-pillar-calibrated-books-v5')

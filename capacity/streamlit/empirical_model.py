@@ -21,9 +21,6 @@ class EmpiricalIRModel:
             raise ValueError('One-way annual turnover must be finite and nonnegative.')
         self.turnover=float(turnover)
         self.mode=mode;self.samples=int(samples);self.seed=int(seed)
-        self.orders=create_liquidity_engine(scenario,buckets,trades,mode,samples,seed,adv_points,universe_size,annual_trades,turnover)
-        self.book_size=self.orders.book_size
-        self.fit=fit_impact_cost(buckets)
         self.maximum=min(self.alpha.maximum,self.tc.maximum)
         for model in (self.alpha,self.tc):
             zero=model.capacity(0,self.maximum)
@@ -31,6 +28,9 @@ class EmpiricalIRModel:
         self.source='three-pillar-empirical'
         if not .5 <= scenario.aum0 < self.maximum:
             raise ValueError('Current AUM must lie below the zero-retention boundary to anchor gross alpha.')
+        self.orders=create_liquidity_engine(scenario,buckets,trades,mode,samples,seed,adv_points,universe_size,annual_trades,turnover)
+        self.book_size=self.orders.book_size
+        self.fit=fit_impact_cost(buckets)
         self.anchor_retention=float(self._retention(scenario.aum0))
         if self.anchor_retention<=0:
             raise ValueError('Current AUM requires positive calibrated retention to anchor gross alpha.')

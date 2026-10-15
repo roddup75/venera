@@ -40,3 +40,13 @@ def bucket_migration(book, buckets, current_aum):
             flows.append({'From stage':stage,'From bucket':int(source),'To stage':stage+1,
                           'To bucket':int(target),'Trades':int(round(counts[source,target]))})
     return pd.DataFrame(distributions),pd.DataFrame(flows)
+
+
+def mean_bucket_migration(engine,buckets,current_aum):
+    """Mean frequencies from the same seeded annual books used for capacity."""
+    counts=np.rint(engine.count_weights*engine.book_size*engine.samples).astype(int)
+    book=pd.DataFrame({'Baseline order/ADV':engine.x,'Sampled orders':counts})
+    distributions,flows=bucket_migration(book,buckets,current_aum)
+    distributions['Trades']=distributions.Trades/engine.samples
+    flows['Trades']=flows.Trades/engine.samples
+    return distributions,flows

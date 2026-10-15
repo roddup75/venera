@@ -24,13 +24,13 @@ class UniverseSamplerTests(unittest.TestCase):
         for kwargs in ({'universe_size':0},{'annual_trades':2.5},{'annual_trades':True},{'turnover':-1}):
             with self.assertRaises(ValueError):self.engine(**kwargs)
 
-    def test_seed_equal_tickets_turnover_and_migration(self):
+    def test_seed_calibrated_tickets_turnover_and_migration(self):
         engine=self.engine(seed=42)
         first=engine.sampled_book(0,3.4)
         pd.testing.assert_frame_equal(first,self.engine(seed=42).sampled_book(0,3.4))
         self.assertFalse(np.array_equal(first['Sampled orders'],self.engine(seed=43).sampled_book(0,3.4)['Sampled orders']))
         self.assertEqual(first['Sampled orders'].sum(),971)
-        self.assertEqual(first['Order notional (USD)'].nunique(),1)
+        self.assertEqual(first['Order notional (USD)'].nunique(),6)
         self.assertAlmostEqual(first['Sampled notional (USD)'].sum(),2*.139*3.4e9,places=5)
         doubled=engine.sampled_book(0,6.8)
         np.testing.assert_array_equal(first['Sampled orders'],doubled['Sampled orders'])
@@ -39,7 +39,10 @@ class UniverseSamplerTests(unittest.TestCase):
         dist,_=bucket_migration(first,BUCKETS,3.4)
         for stage in range(3):self.assertEqual(dist[dist.Stage==stage].Trades.sum(),971)
         self.assertFalse(np.array_equal(dist[dist.Stage==1].Trades,dist[dist.Stage==2].Trades))
-        np.testing.assert_allclose(first['Sampled notional weight'],first['Sampled orders']/971)
+        np.testing.assert_array_equal(dist[dist.Stage==0].Trades, list(BUCKETS.trades)+[0])
+        by_bucket=first.groupby('Baseline bucket',sort=False)
+        np.testing.assert_allclose(by_bucket['Sampled notional (USD)'].sum().to_numpy()/first['Sampled notional (USD)'].sum(),BUCKETS.valueUsdMillion/BUCKETS.valueUsdMillion.sum())
+        self.assertFalse(np.allclose(first['Sampled notional weight'],first['Sampled orders']/971))
 
     def test_sampled_impact_matches_inspected_book_and_baseline_pairing(self):
         engine=self.engine(seed=7)
@@ -54,7 +57,10 @@ class UniverseSamplerTests(unittest.TestCase):
     def test_annual_order_count_changes_ticket_and_zero_turnover(self):
         normal=self.engine(mode='Deterministic')
         twice=self.engine(mode='Deterministic',annual_trades=1942)
-        np.testing.assert_allclose(twice.x,normal.x/2)
+        for label in BUCKETS.label:
+            q0=normal.order_notional_usd[normal.baseline_labels==label][0]
+            q1=twice.order_notional_usd[twice.baseline_labels==label][0]
+            self.assertAlmostEqual(q1,q0/2)
         zero=self.engine(turnover=0)
         self.assertEqual(zero.sampled_book(0,3.4)['Sampled notional (USD)'].sum(),0)
         self.assertTrue(np.isfinite(zero.impact_samples([.5,3.4],0,3,.5)).all())
@@ -79,6 +85,36 @@ class UniverseSamplerTests(unittest.TestCase):
         self.assertEqual(len(counts),12)
         self.assertEqual(counts.sum(),971)
         self.assertEqual(counts.max()-counts.min(),1)
-        stock_counts=monthly.groupby('Synthetic stock')['Parent orders'].sum().reindex(range(1,301),fill_value=0)
+        stock_counts=monthly.groupby('Support row')['Parent orders'].sum().reindex(annual['Support row'],fill_value=0)
         np.testing.assert_array_equal(stock_counts,annual['Sampled orders'])
         self.assertAlmostEqual(monthly['Traded notional (USD)'].sum(),annual['Sampled notional (USD)'].sum(),places=5)
+
+    def test_rounding_infeasible_support_and_mean_migration(self):
+        from bucket_sampler import mean_bucket_migration
+        for n in (7,1000,1942):
+            engine=self.engine(annual_trades=n,turnover=.01 if n==7 else 13.9)
+            book=engine.sampled_book(0,3.4)
+            self.assertEqual(book['Sampled orders'].sum(),n)
+            self.assertTrue((book.groupby('Baseline bucket')['Sampled orders'].sum()>0).all())
+        with self.assertRaisesRegex(ValueError,'cover every'):
+            self.engine(annual_trades=5)
+        with self.assertRaisesRegex(ValueError,'No compatible'):
+            self.engine(adv_points=ADV_POINTS.assign(advUsd=1.))
+        engine=self.engine()
+        mean,_=mean_bucket_migration(engine,BUCKETS,3.4)
+        books=[bucket_migration(engine.sampled_book(i,3.4),BUCKETS,3.4)[0].Trades.to_numpy() for i in range(engine.samples)]
+        np.testing.assert_allclose(mean.Trades,np.mean(books,axis=0))
+        det=self.engine(mode='Deterministic')
+        np.testing.assert_allclose(engine.weights.sum(),1)
+        np.testing.assert_allclose(det.weights.sum(),1)
+        self.assertLess(abs(engine.impact_samples([3.4],1,3,.7).mean()-np.dot(det.weights,impact_bps(det.x,1,3,.7))),.01)
+
+    def test_approved_migration_preview_shape(self):
+        from bucket_sampler import mean_bucket_migration
+        engine=create_liquidity_engine(Scenario(),BUCKETS,samples=2000,seed=2026)
+        dist,_=mean_bucket_migration(engine,BUCKETS,3.4)
+        expected=[[82.49,11.64,3.40,1.85,.51,.10,0],
+                  [50.77,37.79,5.57,3.93,1.32,.51,.10],
+                  [31.80,53.74,5.54,5.43,2.09,.98,.42]]
+        for stage in range(3):
+            np.testing.assert_allclose(dist[dist.Stage==stage]['Trade share (%)'],expected[stage],atol=.1)
