@@ -61,3 +61,5 @@ Model Calibration → d) Backtest uncertainty sets `backtest_sd` (default 0.03 I
 Monte Carlo mode shows exact Gaussian P20–P80 IR bands, simulated first-crossing capacity percentiles and CSV exports. Unreached paths remain censored beyond the independent backtest chart horizon. Summary compares both approaches and overlays their capacity histograms. Deterministic mode hides result bands/intervals. Use the ADV sample count and seed, with a separate backtest random stream. `test_backtest_uncertainty.py` checks Gaussian calibration, full-path coherence, crossings including turning points and censoring.
 
 The Capacity Lab sidebar also exposes both uncertainty controls under **Backtest IR curve — advanced parameters**, alongside the fitted-curve coefficients. Sidebar and calibration-tab edits stay synchronized and save as the same strategy settings.
+
+**Empirical IR curve — advanced parameters** in Capacity Lab exposes alpha-decay and transfer-coefficient calibration triples in two sidebar tabs. Both directions stay synchronized with Model Calibration; the same values drive the empirical curve, Summary and saved strategies.

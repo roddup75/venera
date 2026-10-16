@@ -132,7 +132,7 @@ class AppTests(unittest.TestCase):
     def test_alpha_calibration_is_live_and_remains_editable(self):
         app=self.app()
         self.assertEqual(next(m.value for m in app.metric if m.label=='Implied AUM curvature'),'2.04125')
-        next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.48).run()
+        next(n for n in app.sidebar.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
         self.assertEqual(len(app.exception),0,str(app.exception))
         self.assertFalse(any('Apply alpha' in b.label for b in app.button))
         next(n for n in app.number_input if n.label=='Demo point 2 trades >1 day (%)').set_value(0.).run()
@@ -174,7 +174,7 @@ class AppTests(unittest.TestCase):
         def future():return float(table().loc[lambda f:f.AUM==6.,'Net IR'].iloc[0])
         current=next(m.value for m in app.metric if m.label=='Current net IR')
         before=future()
-        next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.48).run()
+        next(n for n in app.sidebar.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
         self.assertLess(future(),before)
         self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),current)
         before=future()
@@ -279,8 +279,8 @@ class AppTests(unittest.TestCase):
                 return original_save(name,parameters,buckets,adv_points,path=path,**kwargs)
             with patch.object(strategy_store,'save_strategy',side_effect=save), patch.object(strategy_store,'load_strategies',side_effect=lambda:original_load(path)):
                 app=self.app()
-                next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.48).run()
-                next(n for n in app.number_input if n.label=='Demo TC point 3 annual alpha (%)').set_value(.25).run()
+                next(n for n in app.sidebar.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
+                next(n for n in app.sidebar.number_input if n.label=='TC point 3 annual alpha (%)').set_value(.25).run()
                 next(n for n in app.number_input if n.label=='Impact one-way annual turnover (%)').set_value(30.).run()
                 next(n for n in app.number_input if n.label=='Sampler Monte Carlo samples').set_value(100).run()
                 next(n for n in app.number_input if n.label=='Sampler random seed').set_value(42).run()
@@ -314,7 +314,7 @@ class AppTests(unittest.TestCase):
                 return original_save(name, parameters, buckets, adv_points, path=path, **kwargs)
             with patch.object(strategy_store, "save_strategy", side_effect=save), patch.object(strategy_store, "load_strategies", side_effect=lambda: original_load(path)):
                 app = self.app()
-                next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.48).run()
+                next(n for n in app.sidebar.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
                 next(n for n in app.text_input if n.label == "Strategy name").set_value("Test copy")
                 next(b for b in app.button if b.label == "Save strategy").click().run()
                 self.assertEqual(len(app.exception), 0, str(app.exception))
@@ -363,6 +363,32 @@ class AppTests(unittest.TestCase):
         calibration.number_input[0].set_value(.12).run()
         menu=next(e for e in app.sidebar.expander if e.label=='Backtest IR curve — advanced parameters')
         self.assertEqual(next(n.value for n in menu.number_input if n.label=='Backtest IR deviation at current AUM'),.12)
+        self.assertEqual(len(app.exception),0,str(app.exception))
+
+    def test_empirical_sidebar_controls_sync_with_calibration(self):
+        app=self.app()
+        menu=next(e for e in app.sidebar.expander if e.label=='Empirical IR curve — advanced parameters')
+        self.assertEqual([t.label for t in menu.tabs],['Alpha decay','Transfer coefficient'])
+        def future_ir():
+            table=next(d.value for d in app.dataframe if 'Empirical net IR' in d.value.columns)
+            return table.loc[table['AUM (USD bn)']==6.,'Empirical net IR'].iloc[0]
+        before=future_ir()
+        next(n for n in menu.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
+        alpha=next(t for t in app.tabs if t.label=='b) Alpha decay')
+        self.assertEqual(next(n.value for n in alpha.number_input if n.label=='Demo point 3 net IR'),.48)
+        self.assertNotEqual(future_ir(),before)
+        next(n for n in alpha.number_input if n.label=='Demo point 3 trades >1 day (%)').set_value(12.).run()
+        menu=next(e for e in app.sidebar.expander if e.label=='Empirical IR curve — advanced parameters')
+        self.assertEqual(next(n.value for n in menu.number_input if n.label=='Alpha point 3 trades >1 day (%)'),12.)
+        next(n for n in menu.number_input if n.label=='TC point 3 annual alpha (%)').set_value(.25).run()
+        tc=next(t for t in app.tabs if t.label=='c) Transfer coefficient decay')
+        self.assertEqual(next(n.value for n in tc.number_input if n.label=='Demo TC point 3 annual alpha (%)'),.25)
+        next(n for n in tc.number_input if n.label=='Demo TC point 2 coefficient (%)').set_value(42.).run()
+        menu=next(e for e in app.sidebar.expander if e.label=='Empirical IR curve — advanced parameters')
+        self.assertEqual(next(n.value for n in menu.number_input if n.label=='TC point 2 coefficient (%)'),42.)
+        self.assertTrue(next(n for n in menu.number_input if n.label=='Alpha point 1 AUM ($bn)').disabled)
+        self.assertTrue(next(n for n in menu.number_input if n.label=='Alpha point 1 trades >1 day (%)').disabled)
+        self.assertTrue(next(n for n in menu.number_input if n.label=='TC point 1 AUM ($bn)').disabled)
         self.assertEqual(len(app.exception),0,str(app.exception))
 
 if __name__=='__main__':

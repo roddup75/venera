@@ -1,5 +1,7 @@
 # Capacity Lab: objectives, approaches and calibration
 
+Co-authors: Rodrigo Dupleich and Onder Gundol.
+
 ## 1. Objective of the exercise
 
 Estimate how net performance changes as assets under management (AUM) grow, and identify the AUM at which net information ratio (IR) reaches a chosen minimum. This supports capacity planning by making assumptions explicit; capacity is not treated as a fixed property of the strategy.

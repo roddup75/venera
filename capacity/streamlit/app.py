@@ -156,13 +156,21 @@ selected_strategy = strategies[selected_strategy_name]
 saved = {**DEFAULT_PARAMETERS, **selected_strategy["parameters"]}
 main_key = f"execution::{selected_strategy_name}::"
 demo_key = main_key+"pillars::"
-def sync_backtest_control(source_key,target_key):
+def sync_calibration_control(source_key,target_key):
     st.session_state[target_key]=st.session_state[source_key]
 
 for parameter in ("backtest_sd","backtest_expansion"):
     sidebar_key=main_key+parameter
     if sidebar_key not in st.session_state:
         st.session_state[sidebar_key]=float(st.session_state.get(demo_key+parameter,saved[parameter]))
+
+for pillar,field in (("alpha","alpha_points"),("tc","tc_points")):
+    for i,point in enumerate(saved[field]):
+        for j,value in enumerate(point):
+            sidebar_key=main_key+f"{pillar}_triple_{i}_{j}"
+            demo_suffix=f"triple_{i}_{j}" if pillar=="alpha" else f"tc_triple_{i}_{j}"
+            if sidebar_key not in st.session_state:
+                st.session_state[sidebar_key]=float(st.session_state.get(demo_key+demo_suffix,value))
 
 model_kind="Three-pillar empirical"
 strategy_ir_points = pd.DataFrame(selected_strategy["ir_points"])[IR_COLUMNS]
@@ -207,6 +215,31 @@ with st.sidebar:
     retained_threshold=float(saved["retained_threshold"])
     st.subheader("Decision threshold")
     minimum_ir=st.number_input("Minimum net IR",0.,10.,float(saved["minimum_ir"]),.05,key=main_key+"minimum_ir")
+    with st.expander("Empirical IR curve — advanced parameters"):
+        st.caption("Edit the same calibration points used in Model Calibration. Changes update Empirical IR curve and Summary; save through Inputs & strategy.")
+        sidebar_alpha,sidebar_tc=st.tabs(["Alpha decay","Transfer coefficient"])
+        with sidebar_alpha:
+            for i in range(3):
+                st.caption(f"Alpha-decay point {i+1}")
+                fields=[(f"Alpha point {i+1} AUM ($bn)",.5,1000.,.5,i==0),
+                        (f"Alpha point {i+1} trades >1 day (%)",0.,100.,.5,i==0),
+                        (f"Alpha point {i+1} net IR",None,None,.01,False)]
+                for j,(label,lower,upper,step,disabled) in enumerate(fields):
+                    source=main_key+f"alpha_triple_{i}_{j}"
+                    target=demo_key+f"triple_{i}_{j}"
+                    st.number_input(label,min_value=lower,max_value=upper,step=step,format="%.2f",disabled=disabled,key=source,
+                                    on_change=sync_calibration_control,args=(source,target))
+        with sidebar_tc:
+            for i in range(3):
+                st.caption(f"Transfer-coefficient point {i+1}")
+                fields=[(f"TC point {i+1} coefficient (%)",0.,100.,1.,False),
+                        (f"TC point {i+1} AUM ($bn)",.5,1000.,.5,i==0),
+                        (f"TC point {i+1} annual alpha (%)",None,None,.05,False)]
+                for j,(label,lower,upper,step,disabled) in enumerate(fields):
+                    source=main_key+f"tc_triple_{i}_{j}"
+                    target=demo_key+f"tc_triple_{i}_{j}"
+                    st.number_input(label,min_value=lower,max_value=upper,step=step,format="%.2f",disabled=disabled,key=source,
+                                    on_change=sync_calibration_control,args=(source,target))
     with st.expander("Backtest IR curve — advanced parameters"):
         if strategy_ir_fit is None:
             backtest_a = backtest_b = backtest_gamma = None
@@ -218,10 +251,10 @@ with st.sidebar:
             backtest_gamma = st.number_input("Backtest γ", .20, 3.0, float(strategy_ir_fit["gamma"]), .05, key=main_key+"backtest_gamma")
         st.caption("Backtest uncertainty")
         st.number_input("Backtest IR deviation at current AUM",0.,2.,step=.01,format="%.2f",key=main_key+"backtest_sd",
-            on_change=sync_backtest_control,args=(main_key+"backtest_sd",demo_key+"backtest_sd"),
+            on_change=sync_calibration_control,args=(main_key+"backtest_sd",demo_key+"backtest_sd"),
             help="Standard deviation in IR units at current AUM. Zero removes uncertainty. Linked to Model Calibration → Backtest uncertainty.")
         st.slider("Backtest uncertainty expansion rate",0.,3.,step=.1,key=main_key+"backtest_expansion",
-            on_change=sync_backtest_control,args=(main_key+"backtest_expansion",demo_key+"backtest_expansion"),
+            on_change=sync_calibration_control,args=(main_key+"backtest_expansion",demo_key+"backtest_expansion"),
             help="Rate 0 keeps width constant; 1 doubles deviation at ×2 AUM; 2 quadruples it. Linked to Model Calibration → Backtest uncertainty.")
     with st.expander("Display markers"):
         regulatory_raw = st.text_input("Implied regulatory AUM ($bn)", value="" if saved["regulatory_aum"] is None else str(saved["regulatory_aum"]), key=main_key+"regulatory_aum")
@@ -453,9 +486,9 @@ with execution:
         candidate_points = []
         for i, point in enumerate(saved["alpha_points"]):
             cols = st.columns(3)
-            a = cols[0].number_input(f"Demo point {i+1} AUM ($bn)", .5, 1000., float(point[0]), .5, key=demo_key+f"triple_{i}_0", disabled=i==0)
-            b = cols[1].number_input(f"Demo point {i+1} trades >1 day (%)", 0., 100., float(point[1]), .5, key=demo_key+f"triple_{i}_1", disabled=i==0)
-            ir = cols[2].number_input(f"Demo point {i+1} net IR", value=float(point[2]), step=.01, key=demo_key+f"triple_{i}_2")
+            a = cols[0].number_input(f"Demo point {i+1} AUM ($bn)", .5, 1000., float(point[0]), .5, key=demo_key+f"triple_{i}_0", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_0",main_key+f"alpha_triple_{i}_0"), disabled=i==0)
+            b = cols[1].number_input(f"Demo point {i+1} trades >1 day (%)", 0., 100., float(point[1]), .5, key=demo_key+f"triple_{i}_1", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_1",main_key+f"alpha_triple_{i}_1"), disabled=i==0)
+            ir = cols[2].number_input(f"Demo point {i+1} net IR", value=float(point[2]), step=.01, key=demo_key+f"triple_{i}_2", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_2",main_key+f"alpha_triple_{i}_2"))
             candidate_points.append([a,b,ir])
         alpha_points=candidate_points
         try:
@@ -486,7 +519,7 @@ with execution:
                 fig.add_scatter(x=points[:,mapping[x]],y=points[:,mapping[y]],mode="markers",name="Calibration points",marker=dict(color=AMBER,size=10))
                 st.plotly_chart(style_figure(fig),width="stretch")
             display_table(ir_demo,hide_index=True,width="stretch")
-            st.caption("This simplified model ignores how far beyond one day an order takes. Monte Carlo in Capacity Lab conditions on this fitted relationship and assumes independent multi-day order indicators; it does not estimate uncertainty in these three assumptions.")
+            st.caption("This simplified model ignores how far beyond one day an order takes. Monte Carlo in Capacity Lab holds this fitted relationship fixed and varies stock selections only; it does not estimate uncertainty in these three assumptions.")
             st.caption("These points already update the Empirical IR curve and Summary automatically. Save through Inputs & strategy to persist them.")
             st.download_button("Export alpha-decay demo CSV",ir_demo.to_csv(index=False),"demo_alpha_decay.csv","text/csv")
             st.download_button("Download alpha-decay settings",json.dumps({"pillar":"Alpha decay","alpha_points":candidate_points,"aum_curvature":candidate.k,"congestion_ir_curvature":candidate.gamma},indent=2),"alpha_decay_settings.json","application/json")
@@ -497,9 +530,9 @@ with execution:
         candidate_tc_points = []
         for i, point in enumerate(saved["tc_points"]):
             cols = st.columns(3)
-            tc = cols[0].number_input(f"Demo TC point {i+1} coefficient (%)", 0., 100., float(point[0]), 1., key=demo_key+f"tc_triple_{i}_0")
-            a = cols[1].number_input(f"Demo TC point {i+1} AUM ($bn)", .5, 1000., float(point[1]), .5, key=demo_key+f"tc_triple_{i}_1", disabled=i==0)
-            alpha = cols[2].number_input(f"Demo TC point {i+1} annual alpha (%)", value=float(point[2]), step=.05, key=demo_key+f"tc_triple_{i}_2")
+            tc = cols[0].number_input(f"Demo TC point {i+1} coefficient (%)", 0., 100., float(point[0]), 1., key=demo_key+f"tc_triple_{i}_0", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_0",main_key+f"tc_triple_{i}_0"))
+            a = cols[1].number_input(f"Demo TC point {i+1} AUM ($bn)", .5, 1000., float(point[1]), .5, key=demo_key+f"tc_triple_{i}_1", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_1",main_key+f"tc_triple_{i}_1"), disabled=i==0)
+            alpha = cols[2].number_input(f"Demo TC point {i+1} annual alpha (%)", value=float(point[2]), step=.05, key=demo_key+f"tc_triple_{i}_2", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_2",main_key+f"tc_triple_{i}_2"))
             candidate_tc_points.append([tc,a,alpha])
         tc_points=candidate_tc_points
         try:
@@ -534,10 +567,10 @@ with execution:
         st.write("Calibrate uncertainty around the fitted backtest IR curve. The fitted curve stays the central estimate; the band widens as AUM grows.")
         c1,c2=st.columns(2)
         backtest_sd=c1.number_input("Backtest IR deviation at current AUM",0.,2.,float(saved["backtest_sd"]),.01,format="%.2f",key=demo_key+"backtest_sd",
-            on_change=sync_backtest_control,args=(demo_key+"backtest_sd",main_key+"backtest_sd"),
+            on_change=sync_calibration_control,args=(demo_key+"backtest_sd",main_key+"backtest_sd"),
             help="Standard deviation in IR units, not a percentage. A value of 0.03 gives a Gaussian P20–P80 band of approximately ±0.025 IR at current AUM. Zero removes uncertainty.")
         backtest_expansion=c2.slider("Backtest uncertainty expansion rate",0.,3.,float(saved["backtest_expansion"]),.1,key=demo_key+"backtest_expansion",
-            on_change=sync_backtest_control,args=(demo_key+"backtest_expansion",main_key+"backtest_expansion"),
+            on_change=sync_calibration_control,args=(demo_key+"backtest_expansion",main_key+"backtest_expansion"),
             help="Deviation scales as (AUM/current AUM)^rate. Rate 0 gives constant width; 1 doubles deviation at ×2 AUM; 2 quadruples it.")
         st.caption(f"At current AUM: deviation {backtest_sd:.2f} IR. At ×2: {backtest_sd*2**backtest_expansion:.2f}; at ×3: {backtest_sd*3**backtest_expansion:.2f}. The P20–P80 range covers the central 60% of the assumed Gaussian distribution.")
         if backtest_a is not None:
