@@ -65,3 +65,5 @@ The Capacity Lab sidebar also exposes both uncertainty controls under **Backtest
 **Empirical IR curve — advanced parameters** in Capacity Lab exposes alpha-decay and transfer-coefficient calibration triples in two sidebar tabs. Both directions stay synchronized with Inputs & strategy; the same values drive the empirical curve, Summary and saved strategies.
 
 The two sets of three calibration triples are edited in **Inputs & strategy**, alongside the baseline inputs and strategy save form. Model Calibration retains the alpha-decay and transfer-coefficient charts; sidebar edits remain synchronized with the input widgets.
+
+Backtest observations and their editor start at **$0.5bn**. Legacy zero-AUM anchors migrate to $0.5bn with IR preserved on load; saving persists the change. Strategy saves also preserve manual backtest a/b/γ coefficients; changing the backtest observations refits those coefficients.

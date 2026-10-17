@@ -105,8 +105,8 @@ def fit_ir_curve(points: pd.DataFrame) -> dict[str, float | np.ndarray]:
     values = frame.to_numpy(float)
     if len(frame) < 3 or not np.isfinite(values).all():
         raise ValueError("Enter at least three finite AUM and IR observations.")
-    if (frame["aumBn"] < 0).any() or frame["aumBn"].duplicated().any():
-        raise ValueError("AUM values must be non-negative and unique.")
+    if (frame["aumBn"] < MIN_AUM).any() or frame["aumBn"].duplicated().any():
+        raise ValueError("AUM values must start at $0.5bn and be unique.")
     x = frame["aumBn"].to_numpy(float)
     y = frame["ir"].to_numpy(float)
     best: tuple[float, float, float, np.ndarray, float] | None = None
@@ -246,9 +246,9 @@ with st.sidebar:
             st.warning(f"Backtest observations could not be fitted: {strategy_ir_fit_error}")
         else:
             st.caption("Separate empirical curve: IR(A) = a − b A^γ.")
-            backtest_a = st.number_input("Backtest a", value=float(strategy_ir_fit["a"]), step=.01, format="%.4f", key=main_key+"backtest_a")
-            backtest_b = st.number_input("Backtest b", min_value=0.0, value=float(strategy_ir_fit["b"]), step=.005, format="%.5f", key=main_key+"backtest_b")
-            backtest_gamma = st.number_input("Backtest γ", .20, 3.0, float(strategy_ir_fit["gamma"]), .05, key=main_key+"backtest_gamma")
+            backtest_a = st.number_input("Backtest a", value=float(saved["backtest_a"] if saved["backtest_a"] is not None else strategy_ir_fit["a"]), step=.01, format="%.4f", key=main_key+"backtest_a")
+            backtest_b = st.number_input("Backtest b", min_value=0.0, value=float(saved["backtest_b"] if saved["backtest_b"] is not None else strategy_ir_fit["b"]), step=.005, format="%.5f", key=main_key+"backtest_b")
+            backtest_gamma = st.number_input("Backtest γ", .20, 3.0, float(saved["backtest_gamma"] if saved["backtest_gamma"] is not None else strategy_ir_fit["gamma"]), .05, key=main_key+"backtest_gamma")
         st.caption("Backtest uncertainty")
         st.number_input("Backtest IR deviation at current AUM",0.,2.,step=.01,format="%.2f",key=main_key+"backtest_sd",
             on_change=sync_calibration_control,args=(main_key+"backtest_sd",demo_key+"backtest_sd"),
@@ -879,9 +879,9 @@ with creator:
     with st.form("save_execution_strategy"):
         strategy_name = st.text_input("Strategy name", value=selected_strategy_name)
         creator_ir_points = st.data_editor(strategy_ir_points, num_rows="dynamic", hide_index=True, width="stretch",
-            column_config={"aumBn": st.column_config.NumberColumn("AUM (USD bn)", min_value=0.0,format="%.2f"),
+            column_config={"aumBn": st.column_config.NumberColumn("AUM (USD bn)", min_value=MIN_AUM,format="%.2f"),
                            "ir": st.column_config.NumberColumn("Backtest IR",format="%.2f")}, key=main_key+"saved_ir")
-        st.caption("Backtest parameters will be refitted from these saved observations when the strategy is loaded.")
+        st.caption("Backtest AUM starts at $0.5bn. Saving preserves the active backtest coefficients; editing the observations refits and saves coefficients from the new observations.")
         save_clicked = st.form_submit_button("Save strategy", type="primary")
     if save_clicked:
         try:
@@ -892,10 +892,13 @@ with creator:
                 if not np.isfinite(value) or value <= 0:
                     raise ValueError("Display-marker AUM must be positive or blank.")
                 return value
+            saved_backtest_fit=(fit_ir_curve(creator_ir_points) if not creator_ir_points.equals(strategy_ir_points)
+                                else {"a":backtest_a,"b":backtest_b,"gamma":backtest_gamma})
             parameters = {**saved, "engine_name": "Three-pillar empirical", "model_kind": model_kind, "alpha_points": alpha_points, "tc_points": tc_points, "aum0": aum0,
                           "gross_alpha": gross_alpha, "tracking_error": tracking_error,
                           "universe_size":universe_size,"annual_trades":annual_trades,
                           "backtest_sd":backtest_sd,"backtest_expansion":backtest_expansion,
+                          "backtest_a":saved_backtest_fit["a"],"backtest_b":saved_backtest_fit["b"],"backtest_gamma":saved_backtest_fit["gamma"],
                           "max_aum": backtest_horizon, "turnover": turnover, "daily": daily, "half_life": half_life,
                           "annual_cost_bps": annual_cost_bps, "cost_elasticity": cost_elasticity,
                           "calculation_mode": calculation_mode, "mc_samples": int(mc_samples), "mc_seed": int(mc_seed),

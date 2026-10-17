@@ -406,5 +406,29 @@ class AppTests(unittest.TestCase):
             self.assertEqual(len(tab.get('plotly_chart')),3)
         self.assertEqual(len(app.exception),0,str(app.exception))
 
+    def test_backtest_coefficients_save_reload_and_input_floor(self):
+        import json
+        original_save=strategy_store.save_strategy
+        original_load=strategy_store.load_strategies
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'backtest.json'
+            def save(name,parameters,buckets,adv_points,**kwargs):
+                return original_save(name,parameters,buckets,adv_points,path=path,**kwargs)
+            with patch.object(strategy_store,'save_strategy',side_effect=save), patch.object(strategy_store,'load_strategies',side_effect=lambda:original_load(path)):
+                app=self.app()
+                next(n for n in app.number_input if n.label=='Backtest a').set_value(.7).run()
+                next(n for n in app.number_input if n.label=='Backtest b').set_value(.08).run()
+                next(n for n in app.number_input if n.label=='Backtest γ').set_value(1.2).run()
+                next(b for b in app.button if b.label=='Save strategy').click().run()
+                self.assertEqual(len(app.exception),0,str(app.exception))
+                params=original_load(path)['Swiss Strategy']['parameters']
+                self.assertEqual([params[k] for k in ['backtest_a','backtest_b','backtest_gamma']],[.7,.08,1.2])
+                self.assertEqual(next(n.value for n in app.number_input if n.label=='Backtest a'),.7)
+                self.assertEqual(next(n.value for n in app.number_input if n.label=='Backtest b'),.08)
+                self.assertEqual(next(n.value for n in app.number_input if n.label=='Backtest γ'),1.2)
+                editor=next(d for d in app.dataframe if list(d.value.columns)==['aumBn','ir'])
+                self.assertEqual(editor.value.aumBn.min(),.5)
+                self.assertEqual(json.loads(editor.proto.columns)['aumBn']['type_config']['min_value'],.5)
+
 if __name__=='__main__':
     unittest.main()

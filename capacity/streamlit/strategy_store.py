@@ -24,13 +24,14 @@ BUCKET_COLUMNS = [
 ADV_COLUMNS = ["percentile", "advUsd"]
 IR_COLUMNS = ["aumBn", "ir"]
 DEFAULT_IR_POINTS = pd.DataFrame({
-    "aumBn": list(range(10)),
+    "aumBn": [.5, *range(1,10)],
     "ir": [0.60, 0.53, 0.47, 0.40, 0.33, 0.27, 0.20, 0.14, 0.07, 0.00],
 })
 
 DEFAULT_PARAMETERS: dict[str, Any] = {
     "model_kind": "Three-pillar empirical", "alpha_points": DEFAULT_POINTS, "tc_points": DEFAULT_TC_POINTS,
     "universe_size": 300, "annual_trades": 971, "backtest_sd": .03, "backtest_expansion": 1.,
+    "backtest_a": None, "backtest_b": None, "backtest_gamma": None,
     "turnover": 13.9, "aum0": 3.4, "gross_alpha": 0.5, "tracking_error": 1.3,
     "max_aum": 15.0, "daily": 20.0, "half_life": 10.0,
     "annual_cost_bps": annual_cost_from_buckets(BUCKETS, 13.9),
@@ -61,6 +62,21 @@ def default_strategy() -> dict[str, Any]:
     }
 
 
+def upgrade_ir_points(points):
+    """Move a legacy zero-AUM anchor to $0.5bn, preserving its observed IR.
+
+    If a $0.5bn observation already exists, retain that actual observation.
+    Loading never rewrites the saved file.
+    """
+    records=deepcopy(points)
+    has_anchor=any(row.get("aumBn")==MIN_AUM for row in records)
+    if has_anchor:
+        return [row for row in records if row.get("aumBn")!=0]
+    for row in records:
+        if row.get("aumBn")==0:row["aumBn"]=MIN_AUM
+    return records
+
+
 def load_strategies(path: Path = STORE_PATH) -> dict[str, dict[str, Any]]:
     strategies = {"Swiss Strategy": default_strategy()}
     if path.exists():
@@ -70,9 +86,9 @@ def load_strategies(path: Path = STORE_PATH) -> dict[str, dict[str, Any]]:
         for name, strategy in payload.items():
             strategy["parameters"] = upgrade_parameters(strategy.get("parameters", {}), strategy.get("buckets", []))
             strategy["ir_points_source"] = strategy.get("ir_points_source", "saved" if "ir_points" in strategy else "illustrative-default")
-            strategy["ir_points"] = strategy.get(
+            strategy["ir_points"] = upgrade_ir_points(strategy.get(
                 "ir_points", DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records"),
-            )
+            ))
             if not strategy.get("adv_points"):
                 strategy["adv_points"] = ADV_POINTS.to_dict("records")
             validate_strategy(
@@ -104,9 +120,15 @@ def validate_strategy(
     missing_parameters = [key for key in DEFAULT_PARAMETERS if key not in parameters]
     if missing_parameters:
         raise ValueError("Missing strategy parameters: " + ", ".join(missing_parameters))
-    numeric_parameters = [key for key in DEFAULT_PARAMETERS if key not in ("regulatory_aum", "competition_aum", "calculation_mode", "model_kind", "alpha_points", "tc_points")]
+    numeric_parameters = [key for key in DEFAULT_PARAMETERS if key not in ("regulatory_aum", "competition_aum", "calculation_mode", "model_kind", "alpha_points", "tc_points", "backtest_a", "backtest_b", "backtest_gamma")]
     if any(not isinstance(parameters[key], (int, float)) or not math.isfinite(parameters[key]) for key in numeric_parameters):
         raise ValueError("Model parameters must be finite numbers.")
+    coefficients=[parameters[key] for key in ("backtest_a","backtest_b","backtest_gamma")]
+    if any(value is not None for value in coefficients):
+        if any(isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) for value in coefficients):
+            raise ValueError("Saved backtest coefficients must all be finite numbers or all blank.")
+        if coefficients[1]<0 or not .2<=coefficients[2]<=3:
+            raise ValueError("Saved backtest decay must be nonnegative and curvature between 0.2 and 3.")
     if parameters["model_kind"] != "Three-pillar empirical":
         raise ValueError("The capacity model combines all three calibrated pillars.")
     tc=TransferCoefficientModel(parameters["tc_points"],parameters["tracking_error"])
@@ -160,8 +182,8 @@ def validate_strategy(
         raise ValueError("The backtest IR curve requires at least three AUM and IR observations.")
     if not _finite(ir_frame, IR_COLUMNS):
         raise ValueError("Backtest AUM and IR values must be numeric and finite.")
-    if (ir_frame["aumBn"] < 0).any():
-        raise ValueError("Backtest AUM values cannot be negative.")
+    if (ir_frame["aumBn"] < MIN_AUM).any():
+        raise ValueError("Backtest AUM values must be at least $0.5bn.")
     if ir_frame["aumBn"].duplicated().any():
         raise ValueError("Backtest AUM values must be unique.")
 
@@ -182,9 +204,9 @@ def save_strategy(
     if path.exists():
         existing = json.loads(path.read_text())
     if ir_points is None:
-        ir_records = existing.get(clean_name, {}).get(
+        ir_records = upgrade_ir_points(existing.get(clean_name, {}).get(
             "ir_points", DEFAULT_IR_POINTS[IR_COLUMNS].to_dict("records"),
-        )
+        ))
     else:
         ir_records = ir_points[IR_COLUMNS].to_dict("records")
     trade_records = None if trades is None else validate_trades(trades).to_dict("records")

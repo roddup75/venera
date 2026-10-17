@@ -71,10 +71,27 @@ class StrategyStoreTests(unittest.TestCase):
                     self.assertEqual(path.read_text(),'{}')
 
     def test_duplicate_backtest_aum_rejected(self):
-        source=default_strategy();ir=pd.DataFrame(source['ir_points']);ir.loc[1,'aumBn']=0
+        source=default_strategy();ir=pd.DataFrame(source['ir_points']);ir.loc[1,'aumBn']=.5
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError,'unique'):
                 save_strategy('Invalid',DEFAULT_PARAMETERS,pd.DataFrame(source['buckets']),pd.DataFrame(source['adv_points']),Path(directory)/'s.json',ir_points=ir)
+
+    def test_backtest_floor_and_legacy_zero_anchor(self):
+        source=default_strategy()
+        self.assertEqual(source['ir_points'][0],{'aumBn':.5,'ir':.6})
+        source['ir_points'][0]['aumBn']=0
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'legacy.json'
+            original=json.dumps({'Swiss Strategy':source})
+            path.write_text(original)
+            loaded=load_strategies(path)['Swiss Strategy']
+            self.assertEqual(loaded['ir_points'][0],{'aumBn':.5,'ir':.6})
+            self.assertEqual(path.read_text(),original)
+            ir=pd.DataFrame(loaded['ir_points'])
+            for value in (0,.2):
+                ir.loc[0,'aumBn']=value
+                with self.assertRaisesRegex(ValueError,'0.5bn'):
+                    save_strategy('Invalid',DEFAULT_PARAMETERS,pd.DataFrame(source['buckets']),pd.DataFrame(source['adv_points']),path,ir_points=ir)
 
 if __name__ == '__main__':
     unittest.main()
