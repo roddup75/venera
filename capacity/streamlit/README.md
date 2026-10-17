@@ -19,7 +19,7 @@ Python 3.11+; open http://localhost:8501.
 - **Summary:** capacity results and two tables comparing empirical and backtest approaches. The Monte Carlo histogram and crossing export are last.
 - **Empirical IR curve:** net IR and net alpha, optional P20–P80 bands, scenario table, pillar-loss breakdown and exports.
 - **Backtest IR curve:** independent fit to historical AUM/IR observations; replace illustrative defaults with actual backtests.
-- **Model Calibration:** ADV sampler, alpha-decay triples and TC triples. All three pillars feed the same combined curve immediately; there are no separate capacity-model options.
+- **Model Calibration:** ADV sampler and alpha-decay/TC calibration charts. Edit the triples in Inputs & strategy. All three pillars feed the same combined curve immediately; there are no separate capacity-model options.
 - **Inputs & strategy:** universe ADV percentiles, universe size, annual parent-order count, historical impact buckets or actual `q,adv` CSV. Save current inputs and parameters here.
 - **Methodology:** download the current PDF.
 
@@ -62,4 +62,6 @@ Monte Carlo mode shows exact Gaussian P20–P80 IR bands, simulated first-crossi
 
 The Capacity Lab sidebar also exposes both uncertainty controls under **Backtest IR curve — advanced parameters**, alongside the fitted-curve coefficients. Sidebar and calibration-tab edits stay synchronized and save as the same strategy settings.
 
-**Empirical IR curve — advanced parameters** in Capacity Lab exposes alpha-decay and transfer-coefficient calibration triples in two sidebar tabs. Both directions stay synchronized with Model Calibration; the same values drive the empirical curve, Summary and saved strategies.
+**Empirical IR curve — advanced parameters** in Capacity Lab exposes alpha-decay and transfer-coefficient calibration triples in two sidebar tabs. Both directions stay synchronized with Inputs & strategy; the same values drive the empirical curve, Summary and saved strategies.
+
+The two sets of three calibration triples are edited in **Inputs & strategy**, alongside the baseline inputs and strategy save form. Model Calibration retains the alpha-decay and transfer-coefficient charts; sidebar edits remain synchronized with the input widgets.

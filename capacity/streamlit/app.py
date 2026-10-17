@@ -316,6 +316,27 @@ with inputs:
             st.stop()
     st.caption("In the empirical model, changing the order data or estimated bucket costs updates impact estimation. The isolated alpha-decay and TC curves remain controlled by their calibration triples.")
 
+    st.subheader("Alpha-decay calibration triples")
+    st.caption("Three points: AUM, trades taking more than one day (%), and isolated net IR. The first AUM is fixed at $0.5bn with zero multi-day trades. Edits update the sidebar, calibration charts and capacity results immediately.")
+    candidate_points = []
+    for i, point in enumerate(saved["alpha_points"]):
+        cols = st.columns(3)
+        a = cols[0].number_input(f"Alpha-decay point {i+1} AUM ($bn)", .5, 1000., float(point[0]), .5, key=demo_key+f"triple_{i}_0", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_0",main_key+f"alpha_triple_{i}_0"), disabled=i==0)
+        b = cols[1].number_input(f"Alpha-decay point {i+1} trades >1 day (%)", 0., 100., float(point[1]), .5, key=demo_key+f"triple_{i}_1", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_1",main_key+f"alpha_triple_{i}_1"), disabled=i==0)
+        ir = cols[2].number_input(f"Alpha-decay point {i+1} net IR", value=float(point[2]), step=.01, key=demo_key+f"triple_{i}_2", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_2",main_key+f"alpha_triple_{i}_2"))
+        candidate_points.append([a,b,ir])
+    alpha_points=candidate_points
+    st.subheader("Transfer-coefficient calibration triples")
+    st.caption("Three points: transfer coefficient (%), AUM and isolated annual alpha (%). The first AUM is fixed at $0.5bn. Save the strategy below to persist both sets of points.")
+    candidate_tc_points = []
+    for i, point in enumerate(saved["tc_points"]):
+        cols = st.columns(3)
+        tc = cols[0].number_input(f"Transfer-coefficient point {i+1} coefficient (%)", 0., 100., float(point[0]), 1., key=demo_key+f"tc_triple_{i}_0", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_0",main_key+f"tc_triple_{i}_0"))
+        a = cols[1].number_input(f"Transfer-coefficient point {i+1} AUM ($bn)", .5, 1000., float(point[1]), .5, key=demo_key+f"tc_triple_{i}_1", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_1",main_key+f"tc_triple_{i}_1"), disabled=i==0)
+        alpha = cols[2].number_input(f"Transfer-coefficient point {i+1} annual alpha (%)", value=float(point[2]), step=.05, key=demo_key+f"tc_triple_{i}_2", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_2",main_key+f"tc_triple_{i}_2"))
+        candidate_tc_points.append([tc,a,alpha])
+    tc_points=candidate_tc_points
+
 turnover=float(st.session_state.get(demo_key+"impact_turnover",saved.get("turnover",13.9)))
 scenario = Scenario(aum0=aum0, gross_alpha=gross_alpha, tracking_error=tracking_error,
                     daily_participation=daily, half_life=half_life,
@@ -483,14 +504,7 @@ with execution:
     with alpha_tab:
         st.subheader("Alpha decay")
         st.write("Calibrate AUM → percentage of parent orders taking more than one day → net IR. Other effects remain fixed.")
-        candidate_points = []
-        for i, point in enumerate(saved["alpha_points"]):
-            cols = st.columns(3)
-            a = cols[0].number_input(f"Demo point {i+1} AUM ($bn)", .5, 1000., float(point[0]), .5, key=demo_key+f"triple_{i}_0", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_0",main_key+f"alpha_triple_{i}_0"), disabled=i==0)
-            b = cols[1].number_input(f"Demo point {i+1} trades >1 day (%)", 0., 100., float(point[1]), .5, key=demo_key+f"triple_{i}_1", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_1",main_key+f"alpha_triple_{i}_1"), disabled=i==0)
-            ir = cols[2].number_input(f"Demo point {i+1} net IR", value=float(point[2]), step=.01, key=demo_key+f"triple_{i}_2", on_change=sync_calibration_control,args=(demo_key+f"triple_{i}_2",main_key+f"alpha_triple_{i}_2"))
-            candidate_points.append([a,b,ir])
-        alpha_points=candidate_points
+        candidate_points=alpha_points
         try:
             candidate = AlphaDecayModel(candidate_points, tracking_error)
             ir_demo = candidate.curve(candidate_points[-1][0])
@@ -500,7 +514,7 @@ with execution:
             c1,c2 = st.columns(2)
             c1.metric("Implied AUM curvature", f"{candidate.k:.5f}")
             c2.metric("Implied congestion-to-IR curvature", f"{candidate.gamma:.5f}")
-            st.caption("Curvatures are fitted automatically. Edit the triples to calibrate the shape. Trade percentages are count-weighted, not notional-weighted.")
+            st.caption("Curvatures are fitted automatically. Edit the triples in Inputs & strategy or Capacity Lab to calibrate the shape. Trade percentages are count-weighted, not notional-weighted.")
             reference = create_liquidity_engine(scenario, active_buckets, active_trades, "Deterministic",
                                                 adv_points=active_adv_points,universe_size=universe_size,
                                                 annual_trades=annual_trades,turnover=turnover)
@@ -520,21 +534,14 @@ with execution:
                 st.plotly_chart(style_figure(fig),width="stretch")
             display_table(ir_demo,hide_index=True,width="stretch")
             st.caption("This simplified model ignores how far beyond one day an order takes. Monte Carlo in Capacity Lab holds this fitted relationship fixed and varies stock selections only; it does not estimate uncertainty in these three assumptions.")
-            st.caption("These points already update the Empirical IR curve and Summary automatically. Save through Inputs & strategy to persist them.")
+            st.caption("Calibration triples are edited and saved in Inputs & strategy, or adjusted through Capacity Lab. They update the Empirical IR curve and Summary automatically.")
             st.download_button("Export alpha-decay demo CSV",ir_demo.to_csv(index=False),"demo_alpha_decay.csv","text/csv")
             st.download_button("Download alpha-decay settings",json.dumps({"pillar":"Alpha decay","alpha_points":candidate_points,"aum_curvature":candidate.k,"congestion_ir_curvature":candidate.gamma},indent=2),"alpha_decay_settings.json","application/json")
 
     with tc_tab:
         st.subheader("Transfer coefficient calibration")
         st.write("Calibrate AUM → transfer coefficient → annual alpha, holding other effects fixed. Alpha is treated as annual net alpha for the Capacity Lab comparison.")
-        candidate_tc_points = []
-        for i, point in enumerate(saved["tc_points"]):
-            cols = st.columns(3)
-            tc = cols[0].number_input(f"Demo TC point {i+1} coefficient (%)", 0., 100., float(point[0]), 1., key=demo_key+f"tc_triple_{i}_0", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_0",main_key+f"tc_triple_{i}_0"))
-            a = cols[1].number_input(f"Demo TC point {i+1} AUM ($bn)", .5, 1000., float(point[1]), .5, key=demo_key+f"tc_triple_{i}_1", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_1",main_key+f"tc_triple_{i}_1"), disabled=i==0)
-            alpha = cols[2].number_input(f"Demo TC point {i+1} annual alpha (%)", value=float(point[2]), step=.05, key=demo_key+f"tc_triple_{i}_2", on_change=sync_calibration_control,args=(demo_key+f"tc_triple_{i}_2",main_key+f"tc_triple_{i}_2"))
-            candidate_tc_points.append([tc,a,alpha])
-        tc_points=candidate_tc_points
+        candidate_tc_points=tc_points
         try:
             candidate_tc = TransferCoefficientModel(candidate_tc_points, tracking_error)
             tc_curve = candidate_tc.curve(candidate_tc_points[-1][1])
@@ -558,7 +565,7 @@ with execution:
                 st.plotly_chart(style_figure(fig),width="stretch")
             display_table(tc_curve,hide_index=True,width="stretch")
             st.caption("Curvatures fit the estimated triples exactly. This isolated calibration is separate from the alpha-decay curve. It does not estimate IC, independent breadth or statistical TC uncertainty.")
-            st.caption("These points already update the Empirical IR curve and Summary automatically. Save through Inputs & strategy to persist them.")
+            st.caption("Calibration triples are edited and saved in Inputs & strategy, or adjusted through Capacity Lab. They update the Empirical IR curve and Summary automatically.")
             st.download_button("Export transfer-coefficient demo CSV",tc_curve.to_csv(index=False),"demo_transfer_coefficient.csv","text/csv")
             st.download_button("Download TC settings",json.dumps({"pillar":"Transfer coefficient","tc_points":candidate_tc_points,"aum_curvature":candidate_tc.k,"tc_alpha_curvature":candidate_tc.gamma},indent=2),"tc_calibration.json","application/json")
 

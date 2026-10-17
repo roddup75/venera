@@ -135,7 +135,7 @@ class AppTests(unittest.TestCase):
         next(n for n in app.sidebar.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
         self.assertEqual(len(app.exception),0,str(app.exception))
         self.assertFalse(any('Apply alpha' in b.label for b in app.button))
-        next(n for n in app.number_input if n.label=='Demo point 2 trades >1 day (%)').set_value(0.).run()
+        next(n for n in app.number_input if n.label=='Alpha-decay point 2 trades >1 day (%)').set_value(0.).run()
         self.assertTrue(any('increase' in e.value for e in app.warning))
 
     def test_simple_impact_controls_and_isolation(self):
@@ -178,7 +178,7 @@ class AppTests(unittest.TestCase):
         self.assertLess(future(),before)
         self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),current)
         before=future()
-        next(n for n in app.number_input if n.label=='Demo TC point 3 annual alpha (%)').set_value(.2).run()
+        next(n for n in app.number_input if n.label=='Transfer-coefficient point 3 annual alpha (%)').set_value(.2).run()
         self.assertLess(future(),before)
         self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),current)
         before=future()
@@ -200,9 +200,9 @@ class AppTests(unittest.TestCase):
 
     def test_invalid_combined_calibration_remains_editable(self):
         app=self.app()
-        next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.7).run()
+        next(n for n in app.number_input if n.label=='Alpha-decay point 3 net IR').set_value(.7).run()
         self.assertTrue(any('decrease' in e.value for e in app.error))
-        next(n for n in app.number_input if n.label=='Demo point 3 net IR').set_value(.5).run()
+        next(n for n in app.number_input if n.label=='Alpha-decay point 3 net IR').set_value(.5).run()
         self.assertEqual(len(app.exception),0,str(app.exception))
         self.assertTrue(any(m.label=='Current net IR' for m in app.metric))
 
@@ -279,8 +279,8 @@ class AppTests(unittest.TestCase):
                 return original_save(name,parameters,buckets,adv_points,path=path,**kwargs)
             with patch.object(strategy_store,'save_strategy',side_effect=save), patch.object(strategy_store,'load_strategies',side_effect=lambda:original_load(path)):
                 app=self.app()
-                next(n for n in app.sidebar.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
-                next(n for n in app.sidebar.number_input if n.label=='TC point 3 annual alpha (%)').set_value(.25).run()
+                next(n for n in app.number_input if n.label=='Alpha-decay point 3 net IR').set_value(.48).run()
+                next(n for n in app.number_input if n.label=='Transfer-coefficient point 3 annual alpha (%)').set_value(.25).run()
                 next(n for n in app.number_input if n.label=='Impact one-way annual turnover (%)').set_value(30.).run()
                 next(n for n in app.number_input if n.label=='Sampler Monte Carlo samples').set_value(100).run()
                 next(n for n in app.number_input if n.label=='Sampler random seed').set_value(42).run()
@@ -374,21 +374,36 @@ class AppTests(unittest.TestCase):
             return table.loc[table['AUM (USD bn)']==6.,'Empirical net IR'].iloc[0]
         before=future_ir()
         next(n for n in menu.number_input if n.label=='Alpha point 3 net IR').set_value(.48).run()
-        alpha=next(t for t in app.tabs if t.label=='b) Alpha decay')
-        self.assertEqual(next(n.value for n in alpha.number_input if n.label=='Demo point 3 net IR'),.48)
+        alpha=next(t for t in app.tabs if t.label=='Inputs & strategy')
+        self.assertEqual(next(n.value for n in alpha.number_input if n.label=='Alpha-decay point 3 net IR'),.48)
         self.assertNotEqual(future_ir(),before)
-        next(n for n in alpha.number_input if n.label=='Demo point 3 trades >1 day (%)').set_value(12.).run()
+        next(n for n in alpha.number_input if n.label=='Alpha-decay point 3 trades >1 day (%)').set_value(12.).run()
         menu=next(e for e in app.sidebar.expander if e.label=='Empirical IR curve — advanced parameters')
         self.assertEqual(next(n.value for n in menu.number_input if n.label=='Alpha point 3 trades >1 day (%)'),12.)
         next(n for n in menu.number_input if n.label=='TC point 3 annual alpha (%)').set_value(.25).run()
-        tc=next(t for t in app.tabs if t.label=='c) Transfer coefficient decay')
-        self.assertEqual(next(n.value for n in tc.number_input if n.label=='Demo TC point 3 annual alpha (%)'),.25)
-        next(n for n in tc.number_input if n.label=='Demo TC point 2 coefficient (%)').set_value(42.).run()
+        tc=next(t for t in app.tabs if t.label=='Inputs & strategy')
+        self.assertEqual(next(n.value for n in tc.number_input if n.label=='Transfer-coefficient point 3 annual alpha (%)'),.25)
+        next(n for n in tc.number_input if n.label=='Transfer-coefficient point 2 coefficient (%)').set_value(42.).run()
         menu=next(e for e in app.sidebar.expander if e.label=='Empirical IR curve — advanced parameters')
         self.assertEqual(next(n.value for n in menu.number_input if n.label=='TC point 2 coefficient (%)'),42.)
         self.assertTrue(next(n for n in menu.number_input if n.label=='Alpha point 1 AUM ($bn)').disabled)
         self.assertTrue(next(n for n in menu.number_input if n.label=='Alpha point 1 trades >1 day (%)').disabled)
         self.assertTrue(next(n for n in menu.number_input if n.label=='TC point 1 AUM ($bn)').disabled)
+        self.assertEqual(len(app.exception),0,str(app.exception))
+
+    def test_calibration_triples_are_inputs_and_charts_remain_in_calibration(self):
+        app=self.app()
+        inputs=next(t for t in app.tabs if t.label=='Inputs & strategy')
+        alpha=[n for n in inputs.number_input if n.label.startswith('Alpha-decay point')]
+        tc=[n for n in inputs.number_input if n.label.startswith('Transfer-coefficient point')]
+        self.assertEqual(len(alpha),9)
+        self.assertEqual(len(tc),9)
+        self.assertEqual(next(n.value for n in alpha if n.label=='Alpha-decay point 1 AUM ($bn)'),.5)
+        self.assertEqual(next(n.value for n in tc if n.label=='Transfer-coefficient point 1 AUM ($bn)'),.5)
+        for label in ['b) Alpha decay','c) Transfer coefficient decay']:
+            tab=next(t for t in app.tabs if t.label==label)
+            self.assertEqual(len(tab.number_input),0)
+            self.assertEqual(len(tab.get('plotly_chart')),3)
         self.assertEqual(len(app.exception),0,str(app.exception))
 
 if __name__=='__main__':
