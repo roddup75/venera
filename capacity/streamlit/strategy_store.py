@@ -25,7 +25,7 @@ ADV_COLUMNS = ["percentile", "advUsd"]
 IR_COLUMNS = ["aumBn", "ir"]
 DEFAULT_IR_POINTS = pd.DataFrame({
     "aumBn": [.5, *range(1,10)],
-    "ir": [0.60, 0.53, 0.47, 0.40, 0.33, 0.27, 0.20, 0.14, 0.07, 0.00],
+    "ir": [0.68, 0.61, 0.54, 0.47, 0.40, 0.33, 0.26, 0.19, 0.12, 0.05],
 })
 
 DEFAULT_PARAMETERS: dict[str, Any] = {
