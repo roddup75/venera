@@ -8,6 +8,20 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 class AppTests(unittest.TestCase):
+    def setUp(self):
+        # UI tests must not read or overwrite the user's saved strategy.
+        directory=tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        fixture=Path(directory.name)/'strategies.json'
+        real_load=strategy_store.load_strategies
+        real_save=strategy_store.save_strategy
+        def load(path=None):return real_load(fixture if path is None else path)
+        def save(name,parameters,buckets,adv_points=None,path=None,**kwargs):
+            return real_save(name,parameters,buckets,adv_points,path=fixture if path is None else path,**kwargs)
+        for target,replacement in [('load_strategies',load),('save_strategy',save)]:
+            patcher=patch.object(strategy_store,target,replacement)
+            patcher.start()
+            self.addCleanup(patcher.stop)
     def app(self):
         app=AppTest.from_file(str(Path(__file__).with_name('app.py')),default_timeout=30).run()
         self.assertEqual(len(app.exception),0, str(app.exception))
@@ -287,6 +301,8 @@ class AppTests(unittest.TestCase):
                 next(n for n in app.number_input if n.label=='Baseline gross alpha (%)').set_value(.73).run()
                 next(n for n in app.number_input if n.label=='Backtest IR deviation at current AUM').set_value(.08).run()
                 next(n for n in app.slider if n.label=='Backtest uncertainty expansion rate').set_value(1.5).run()
+                next(n for n in app.sidebar.number_input if n.label=='Empirical IR deviation at current AUM').set_value(.07).run()
+                next(n for n in app.sidebar.slider if n.label=='Empirical uncertainty expansion rate').set_value(1.5).run()
                 before=next(m.value for m in app.metric if m.label=='Current net IR')
                 next(n for n in app.text_input if n.label=='Strategy name').set_value('Empirical copy')
                 next(b for b in app.button if b.label=='Save strategy').click().run()
@@ -302,6 +318,8 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(params['gross_alpha'],.73)
                 self.assertEqual(params['backtest_sd'],.08)
                 self.assertEqual(params['backtest_expansion'],1.5)
+                self.assertEqual(params['empirical_sd'],.07)
+                self.assertEqual(params['empirical_expansion'],1.5)
                 self.assertEqual(saved['methodology'],'three-pillar-calibrated-books-v5')
                 self.assertEqual(next(m.value for m in app.metric if m.label=='Current net IR'),before)
 
@@ -429,6 +447,21 @@ class AppTests(unittest.TestCase):
                 editor=next(d for d in app.dataframe if list(d.value.columns)==['aumBn','ir'])
                 self.assertEqual(editor.value.aumBn.min(),.5)
                 self.assertEqual(json.loads(editor.proto.columns)['aumBn']['type_config']['min_value'],.5)
+
+    def test_final_empirical_ir_uncertainty_controls_preserve_centre(self):
+        app=self.app()
+        def summary():return next(d.value for d in app.dataframe if 'Approach' in d.value.columns)
+        before=summary().copy()
+        next(n for n in app.sidebar.number_input if n.label=='Empirical IR deviation at current AUM').set_value(.1).run()
+        overview=next(t for t in app.tabs if t.label=='Empirical IR curve')
+        self.assertEqual(next(n.value for n in overview.number_input if n.label=='Empirical IR deviation at current AUM'),.1)
+        next(n for n in overview.slider if n.label=='Empirical uncertainty expansion rate').set_value(1.5).run()
+        self.assertEqual(next(n.value for n in app.sidebar.slider if n.label=='Empirical uncertainty expansion rate'),1.5)
+        after=summary()
+        self.assertEqual(after.loc[0,'Current net IR'],before.loc[0,'Current net IR'])
+        self.assertEqual(after.loc[1,'Capacity P20'],before.loc[1,'Capacity P20'])
+        self.assertNotEqual(after.loc[0,'Capacity P20'],before.loc[0,'Capacity P20'])
+        self.assertEqual(len(app.exception),0,str(app.exception))
 
 if __name__=='__main__':
     unittest.main()

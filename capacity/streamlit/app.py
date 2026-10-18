@@ -159,7 +159,7 @@ demo_key = main_key+"pillars::"
 def sync_calibration_control(source_key,target_key):
     st.session_state[target_key]=st.session_state[source_key]
 
-for parameter in ("backtest_sd","backtest_expansion"):
+for parameter in ("backtest_sd","backtest_expansion","empirical_sd","empirical_expansion"):
     sidebar_key=main_key+parameter
     if sidebar_key not in st.session_state:
         st.session_state[sidebar_key]=float(st.session_state.get(demo_key+parameter,saved[parameter]))
@@ -201,10 +201,10 @@ with st.sidebar:
     calculation_mode=st.selectbox("Calculation mode",["Deterministic","Monte Carlo"],
         index=0 if saved["calculation_mode"]=="Deterministic" else 1,key=main_key+"calculation_mode",
         help="Monte Carlo adds 20–80% IR bands and the capacity interval at minimum IR.")
-    uncertainty_source="Stock selections only"
+    uncertainty_source="Stock selections and independent Gaussian final IR"
     mc_samples=int(st.session_state.get(demo_key+"samples",saved["mc_samples"]))
     mc_seed=int(st.session_state.get(demo_key+"seed",saved["mc_seed"]))
-    st.caption("Empirical bands vary stock selections; backtest bands use calibrated Gaussian uncertainty. Sample count and seed are in Model Calibration → ADV bucket sampler.")
+    st.caption("Empirical bands combine stock selections and final-IR uncertainty; backtest bands use separate Gaussian uncertainty. Sample count and seed are in Model Calibration → ADV bucket sampler.")
     with st.expander("Execution reference"):
         daily=st.number_input("Daily participation (% ADV)",.1,100.,float(saved["daily"]),.5,key=main_key+"daily",
             help="Used by the execution-time reference in alpha calibration. It does not change order/ADV buckets or the combined IR curve.")
@@ -240,6 +240,13 @@ with st.sidebar:
                     target=demo_key+f"tc_triple_{i}_{j}"
                     st.number_input(label,min_value=lower,max_value=upper,step=step,format="%.2f",disabled=disabled,key=source,
                                     on_change=sync_calibration_control,args=(source,target))
+        st.caption("Final empirical IR uncertainty")
+        empirical_sd=st.number_input("Empirical IR deviation at current AUM",0.,2.,step=.01,format="%.2f",key=main_key+"empirical_sd",
+            on_change=sync_calibration_control,args=(main_key+"empirical_sd",demo_key+"empirical_sd"),
+            help="Independent Gaussian uncertainty added after alpha decay, TC and impact costs. Zero keeps only stock-selection uncertainty.")
+        empirical_expansion=st.slider("Empirical uncertainty expansion rate",0.,3.,step=.1,key=main_key+"empirical_expansion",
+            on_change=sync_calibration_control,args=(main_key+"empirical_expansion",demo_key+"empirical_expansion"),
+            help="Deviation scales as (AUM/current AUM)^rate. Rate 1 doubles deviation at ×2 AUM; rate 0 keeps it constant.")
     with st.expander("Backtest IR curve — advanced parameters"):
         if strategy_ir_fit is None:
             backtest_a = backtest_b = backtest_gamma = None
@@ -601,7 +608,7 @@ with execution:
 backtest_horizon=float(max_aum)
 
 try:
-    engine=EmpiricalIRModel(scenario,alpha_points,tc_points,active_buckets,active_trades,turnover,calculation_mode,int(mc_samples),int(mc_seed),active_adv_points,universe_size,annual_trades)
+    engine=EmpiricalIRModel(scenario,alpha_points,tc_points,active_buckets,active_trades,turnover,calculation_mode,int(mc_samples),int(mc_seed),active_adv_points,universe_size,annual_trades,ir_deviation=empirical_sd,uncertainty_expansion=empirical_expansion)
     if max_aum>engine.maximum:
         st.warning(f"Empirical chart horizon limited to ${engine.maximum:.2f}bn, where calibrated retention reaches zero.")
         max_aum=engine.maximum
@@ -665,10 +672,17 @@ def backtest_percentile_display(value):
     return f"${value:.2f}bn" if value is not None else f"> ${backtest_horizon:.2f}bn"
 
 with overview:
+    with st.expander("Final empirical IR uncertainty"):
+        c1,c2=st.columns(2)
+        c1.number_input("Empirical IR deviation at current AUM",0.,2.,float(empirical_sd),.01,format="%.2f",key=demo_key+"empirical_sd",
+            on_change=sync_calibration_control,args=(demo_key+"empirical_sd",main_key+"empirical_sd"))
+        c2.slider("Empirical uncertainty expansion rate",0.,3.,float(empirical_expansion),.1,key=demo_key+"empirical_expansion",
+            on_change=sync_calibration_control,args=(demo_key+"empirical_expansion",main_key+"empirical_expansion"))
+        st.caption(f"Final-step Gaussian deviation: {empirical_sd:.2f} IR at current AUM, {empirical_sd*2**empirical_expansion:.2f} at ×2 and {empirical_sd*3**empirical_expansion:.2f} at ×3. One independent Gaussian shock per full IR curve is reused across AUM, in addition to each sampled trading book. The central curve and current net-alpha/IR anchor are unchanged. Set deviation to zero for stock selections only.")
     st.caption(f"Gross alpha is anchored to {gross_alpha:.2f}% per year at current AUM (${aum0:.2f}bn). Alpha-decay and TC calibrations define relative retention; full estimated impact costs are deducted once.")
     st.caption(f"Impact fit uses estimated bucket costs; one-way annual turnover {turnover:.2f}%. Beyond ${last_calibration_aum:.2f}bn is extrapolation.")
     if calculation_mode=="Monte Carlo":
-        st.caption(f"{mc_samples:,} draws · {engine.book_size:,} annual orders · seed {mc_seed}. The 20–80% bands vary stock selections only. Gross alpha at current AUM and all pillar calibrations are fixed across draws; central IR equals mean simulated IR.")
+        st.caption(f"{mc_samples:,} draws · {engine.book_size:,} annual orders · seed {mc_seed}. The 20–80% bands combine stock selections with independent final-IR Gaussian uncertainty. Pillar calibrations stay fixed. The central curve is the expected IR; the finite-simulation mean can differ slightly.")
     else:
         st.caption("Deterministic curve without intervals. Select Monte Carlo for capacity uncertainty.")
     c1,c2,c3,c4=st.columns(4)
@@ -716,7 +730,7 @@ with overview:
         gross_alpha_anchor_pct=gross_alpha,gross_alpha_anchor_aum=aum0,one_way_turnover_pct=turnover,
         impact_a=engine.fit.a,impact_b=engine.fit.b,impact_gamma=engine.fit.gamma,
         order_source=engine.orders.source,universe_size=universe_size,parent_order_count=engine.book_size,
-        adv_percentiles=json.dumps(active_adv_points.to_dict("records")),uncertainty_source=uncertainty_source,
+        adv_percentiles=json.dumps(active_adv_points.to_dict("records")),uncertainty_source=uncertainty_source,empirical_sd=empirical_sd,empirical_expansion=empirical_expansion,
         interval_lower_percentile=20,interval_upper_percentile=80,calculation_mode=calculation_mode,
         mc_samples=int(mc_samples),mc_seed=int(mc_seed))
     st.download_button("Export capacity curve CSV", export.to_csv(index=False), "execution_capacity_curve.csv", "text/csv")
@@ -770,15 +784,15 @@ with summary:
         cells[1].metric("Capacity median (P50)",percentile_display(capacity_uncertainty['P50']))
         cells[2].metric("Capacity P80",percentile_display(capacity_uncertainty['P80']))
         cells[3].metric("Threshold reached within horizon",f"{capacity_uncertainty['Threshold reached (%)']:.2f}%")
-        st.caption(f"Minimum net IR {minimum_ir:.2f}. The empirical P20–P80 range is the central 60% of stock-selection outcomes; alpha-decay and TC are fixed.")
+        st.caption(f"Minimum net IR {minimum_ir:.2f}. The empirical P20–P80 capacity range is the central 60% of first crossings from stock selections plus final-IR Gaussian uncertainty; alpha-decay and TC are fixed.")
         lo,hi=capacity_uncertainty['P20'],capacity_uncertainty['P80']
         if lo is not None and hi is not None and lo < hi and f"{lo:.2f}" == f"{hi:.2f}":
             st.caption("The capacity range is narrower than $0.01bn; its endpoints round to the same displayed value. The histogram and CSV retain full precision.")
         if capacity_uncertainty['Censored simulations']:
             st.caption(f"{capacity_uncertainty['Censored simulations']:,} simulations remain beyond ${max_aum:.2f}bn and are included in the percentile calculation. The histogram shows reached crossings only.")
         if backtest_interval is not None:
-            st.caption(f"Backtest capacity: P20 {backtest_percentile_display(backtest_interval['P20'])}, median {backtest_percentile_display(backtest_interval['P50'])}, P80 {backtest_percentile_display(backtest_interval['P80'])}. Threshold reached in {backtest_interval['Threshold reached (%)']:.2f}% of draws. Unreached paths remain beyond the backtest search horizon of ${backtest_horizon:.2f}bn; they are retained in the percentiles. Backtest ranges reflect assumed estimation uncertainty; empirical ranges reflect stock selections.")
-        st.download_button('Export simulated capacity crossings CSV',capacity_draws.assign(seed=int(mc_seed),uncertainty_source=uncertainty_source).to_csv(index=False),'simulated_capacity_crossings.csv','text/csv')
+            st.caption(f"Backtest capacity: P20 {backtest_percentile_display(backtest_interval['P20'])}, median {backtest_percentile_display(backtest_interval['P50'])}, P80 {backtest_percentile_display(backtest_interval['P80'])}. Threshold reached in {backtest_interval['Threshold reached (%)']:.2f}% of draws. Unreached paths remain beyond the backtest search horizon of ${backtest_horizon:.2f}bn; they are retained in the percentiles. Backtest ranges reflect assumed estimation uncertainty; empirical ranges combine stock selections and final-IR uncertainty.")
+        st.download_button('Export simulated capacity crossings CSV',capacity_draws.assign(seed=int(mc_seed),uncertainty_source=uncertainty_source,empirical_sd=empirical_sd,empirical_expansion=empirical_expansion).to_csv(index=False),'simulated_capacity_crossings.csv','text/csv')
 
 with backtest_ir:
     if selected_strategy.get("ir_points_source") == "illustrative-default":
@@ -898,6 +912,7 @@ with creator:
                           "gross_alpha": gross_alpha, "tracking_error": tracking_error,
                           "universe_size":universe_size,"annual_trades":annual_trades,
                           "backtest_sd":backtest_sd,"backtest_expansion":backtest_expansion,
+                          "empirical_sd":empirical_sd,"empirical_expansion":empirical_expansion,
                           "backtest_a":saved_backtest_fit["a"],"backtest_b":saved_backtest_fit["b"],"backtest_gamma":saved_backtest_fit["gamma"],
                           "max_aum": backtest_horizon, "turnover": turnover, "daily": daily, "half_life": half_life,
                           "annual_cost_bps": annual_cost_bps, "cost_elasticity": cost_elasticity,

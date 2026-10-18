@@ -9,7 +9,11 @@ from impact_cost import fit_impact_cost,impact_bps
 
 class EmpiricalIRModel:
     def __init__(self,scenario,alpha_points,tc_points,buckets,trades=None,turnover=13.9,
-                 mode='Monte Carlo',samples=2000,seed=2026,adv_points=None,universe_size=300,annual_trades=971):
+                 mode='Monte Carlo',samples=2000,seed=2026,adv_points=None,universe_size=300,annual_trades=971,ir_deviation=0.,uncertainty_expansion=1.):
+        if not np.isfinite([ir_deviation,uncertainty_expansion]).all() or ir_deviation<0 or not 0<=uncertainty_expansion<=3:
+            raise ValueError('Final empirical IR deviation must be nonnegative and expansion between 0 and 3.')
+        self.ir_deviation=float(ir_deviation)
+        self.uncertainty_expansion=float(uncertainty_expansion)
         self.p=scenario
         self.alpha=AlphaDecayModel(alpha_points,scenario.tracking_error)
         self.tc=TransferCoefficientModel(tc_points,scenario.tracking_error)
@@ -107,16 +111,24 @@ class EmpiricalIRModel:
             self._simulation_cost_coefficients=2*self.turnover/100*costs/(100*self.p.tracking_error)
         return self._simulation_cost_coefficients
 
-    def _paired_ir(self,aums,coefficients):
-        # Gross alpha at current AUM is fixed; only trading-book costs vary.
+    def ir_standard_deviation(self,aums):
+        return self.ir_deviation*(np.asarray(aums)/self.p.aum0)**self.uncertainty_expansion
+
+    def _ir_shocks(self):
+        if not hasattr(self,'_final_ir_shocks'):
+            self._final_ir_shocks=np.random.default_rng(np.random.SeedSequence([self.seed,1291])).standard_normal(self.samples)
+        return self._final_ir_shocks
+
+    def _paired_ir(self,aums,coefficients,shocks=None):
         cost_ir=self._impact_intercept_ir()+coefficients*(np.asarray(aums)/self.p.aum0)**self.fit.gamma
-        return self._gross_ir(aums)-cost_ir
+        shocks=self._ir_shocks() if shocks is None else shocks
+        return self._gross_ir(aums)-cost_ir+shocks*self.ir_standard_deviation(aums)
 
     def simulated_curves(self,aums):
-        """Return complete, paired, nonincreasing IR paths (samples x AUM).
+        """Return complete paired IR paths (samples x AUM).
 
         Each book is shared across AUM, independent of the plotting grid.
-        Only stock selection (or actual-order resampling) varies.
+        An independent Gaussian final-IR shock is reused across AUM when enabled.
         """
         aums=np.asarray(aums,float)
         if aums.ndim!=1 or not len(aums) or not np.isfinite(aums).all() or np.any(aums<.5) or np.any(aums>self.maximum+1e-10):
@@ -124,7 +136,59 @@ class EmpiricalIRModel:
         coefficients=self._impact_coefficients()
         base_ir=self._gross_ir(aums)
         cost_scale=(aums/self.p.aum0)**self.fit.gamma
-        return base_ir[None,:]-self._impact_intercept_ir()-coefficients[:,None]*cost_scale[None,:]
+        return (base_ir[None,:]-self._impact_intercept_ir()-coefficients[:,None]*cost_scale[None,:]
+                +self._ir_shocks()[:,None]*self.ir_standard_deviation(aums)[None,:])
+
+    def _first_crossing_brackets(self,minimum_ir,maximum,coefficients):
+        """Scan for first crossings, refining every intervening local minimum.
+
+        Gaussian perturbations can make optimistic paths turn upward. Inspect
+        a shared 1,025-point grid plus calibration knots, then refine local
+        minima with golden-section search before bisection of the first root.
+        """
+        grid=np.unique(np.r_[np.linspace(.5,maximum,1025),self.alpha.points[:,0],self.tc.points[:,1],self.p.aum0])
+        grid=grid[(grid>=.5)&(grid<=maximum)]
+        shocks=self._ir_shocks()
+        lo=np.full(self.samples,.5);hi=np.full(self.samples,maximum)
+        reached=np.zeros(self.samples,dtype=bool)
+        batch=max(1,min(128,500000//len(grid)))
+        golden=(np.sqrt(5)-1)/2
+        for start in range(0,self.samples,batch):
+            stop=min(start+batch,self.samples)
+            c=coefficients[start:stop];z=shocks[start:stop]
+            values=self._paired_ir(grid[None,:],c[:,None],z[:,None])
+            below=values<=minimum_ir
+            found=below.any(axis=1)
+            first=np.where(found,below.argmax(axis=1),len(grid)-1)
+            local_lo=grid[np.maximum(first-1,0)].copy();local_hi=grid[first].copy()
+            # A crossing followed by recovery may lie between two above-threshold
+            # grid points. Refine all local minima preceding the detected root.
+            minima=(values[:,1:-1]<values[:,:-2])&(values[:,1:-1]<=values[:,2:])
+            rows,indices=np.nonzero(minima)
+            indices+=1
+            keep=(~found[rows])|(indices<first[rows])
+            rows=rows[keep];indices=indices[keep]
+            if len(rows):
+                left=grid[indices-1].copy();right=grid[indices+1].copy()
+                x1=right-golden*(right-left);x2=left+golden*(right-left)
+                f1=self._paired_ir(x1,c[rows],z[rows]);f2=self._paired_ir(x2,c[rows],z[rows])
+                for _ in range(40):
+                    choose_left=f1<=f2
+                    right=np.where(choose_left,x2,right)
+                    left=np.where(choose_left,left,x1)
+                    x1=right-golden*(right-left);x2=left+golden*(right-left)
+                    f1=self._paired_ir(x1,c[rows],z[rows]);f2=self._paired_ir(x2,c[rows],z[rows])
+                minimum=(left+right)/2
+                valid=self._paired_ir(minimum,c[rows],z[rows])<=minimum_ir
+                rows=rows[valid];indices=indices[valid];minimum=minimum[valid]
+                # Keep the earliest qualifying minimum for each simulated path.
+                order=np.lexsort((minimum,rows))
+                _,positions=np.unique(rows[order],return_index=True)
+                chosen=order[positions]
+                r=rows[chosen]
+                local_lo[r]=grid[indices[chosen]-1];local_hi[r]=minimum[chosen];found[r]=True
+            lo[start:stop]=local_lo;hi[start:stop]=local_hi;reached[start:stop]=found
+        return lo,hi,reached
 
     def capacity_samples(self,minimum_ir,maximum):
         """Solve the first threshold crossing separately for every simulated path.
@@ -136,9 +200,12 @@ class EmpiricalIRModel:
         if not np.isfinite(minimum_ir):
             raise ValueError('Minimum IR must be finite.')
         coefficients=self._impact_coefficients()
-        hi=np.full(self.samples,maximum);lo=np.full(self.samples,.5)
-        already=self._paired_ir(lo,coefficients)<=minimum_ir
-        reached=self._paired_ir(hi,coefficients)<=minimum_ir
+        already=self._paired_ir(np.full(self.samples,.5),coefficients)<=minimum_ir
+        if self.ir_deviation>0:
+            lo,hi,reached=self._first_crossing_brackets(minimum_ir,maximum,coefficients)
+        else:
+            hi=np.full(self.samples,maximum);lo=np.full(self.samples,.5)
+            reached=self._paired_ir(hi,coefficients)<=minimum_ir
         for _ in range(45):
             mid=(lo+hi)/2
             above=self._paired_ir(mid,coefficients)>minimum_ir

@@ -108,7 +108,7 @@ Empirical IR curve shows net IR and net alpha. Summary shows capacity results an
 
 Capacity is the first AUM from USD 0.5bn where the central curve reaches the chosen threshold. A threshold not reached within range does not imply unlimited capacity. Predictions beyond calibration points are labelled extrapolation. The combined domain stops at the first zero retained-alpha factor or an earlier pillar-domain limit.
 
-**Monte Carlo** is the default: simulate complete curves and display pointwise 20th–80th percentile IR bands. **Deterministic** remains available without intervals. Only stock selections or CSV orders vary; alpha-decay and TC curves stay fixed. Tables display at most two decimals; calculations, stored values and CSV exports retain full precision.
+**Monte Carlo** is the default: simulate complete curves and display pointwise 20th–80th percentile IR bands. **Deterministic** remains available without intervals. Stock selections (or CSV orders) and an independent final-IR Gaussian term vary; alpha-decay and TC curves stay fixed. Tables display at most two decimals; calculations, stored values and CSV exports retain full precision.
 
 ### 3.6 Capacity interval: the final objective
 
@@ -120,7 +120,7 @@ A path not crossing within the chosen horizon or model domain remains a beyond-h
 
 ### What Monte Carlo samples
 
-A sample is an alternative annual trading book, not an individual trade-alpha forecast. Only stock selection (or CSV resampling) varies; alpha-decay and TC curves stay fixed. Initial settings are 2,000 samples and seed 2026; universe mode uses the annual order count (default 971); CSV mode uses the number of observed rows.
+A sample is an alternative annual trading book, not an individual trade-alpha forecast. Stock selection (or CSV resampling) and an optional final-IR Gaussian shock vary; alpha-decay and TC curves stay fixed. Initial settings are 2,000 samples and seed 2026; universe mode uses the annual order count (default 971); CSV mode uses the number of observed rows.
 
 The workflow for one simulation is:
 
@@ -136,7 +136,7 @@ flowchart TD
     C1 --> M["Repeat M = 2,000 times; report capacity P20, median and P80"]
 ```
 
-**M versus N:** M is the number of simulations; N is the annual order count in each universe book (or observed row count for CSV). Increasing M improves numerical stability without increasing N. Reuse each cost book across AUM. Alpha-decay and TC curves are identical for all draws; rising costs and falling retention make each complete path nonincreasing. With fixed alpha-decay and TC curves, mean simulated impact produces mean simulated IR. Multinomial sampling follows standard count models [1]; CSV resampling is the empirical bootstrap [2].
+**M versus N:** M is the number of simulations; N is the annual order count in each universe book (or observed row count for CSV). Increasing M improves numerical stability without increasing N. Reuse each cost book across AUM. Alpha-decay and TC curves are identical for all draws; before the final shock, rising costs and falling retention make paths nonincreasing. The final Gaussian term can produce recoveries. The central curve uses mean impact and zero expected final shock. Multinomial sampling follows standard count models [1]; CSV resampling is the empirical bootstrap [2].
 
 - **Universe ADV: conditional stock selection.** Each bucket has a fixed annual order count and ticket determined by historical count and value shares. Draw compatible stock ADVs uniformly with replacement, equivalently multinomial stock counts within each bucket. Baseline composition is fixed; within-bucket participation and migration are random.
 - **Actual trades: empirical bootstrap.** Observed complete order-notional/ADV pairs are sampled uniformly with replacement. Equal selection probability does not establish equal alpha contribution.
@@ -147,7 +147,7 @@ The same cost book is reused across AUM; full impact costs are deducted from gro
 
 Orders are exchangeable for alpha-decay purposes: no trade-specific alpha forecasts or delay sensitivities are modelled. This is a count-based approximation, not an allocation of equal alpha dollars to every trade. Costs remain notional-weighted.
 
-Alpha-decay, congestion percentages, TC, tracking error and fitted cost parameters stay fixed across draws. Difficult trades may carry more or less alpha in reality. Ranges exclude that dependence, parameter uncertainty, clustered orders and changing liquidity. Conditional uniform selection, constant tickets within each bucket and interpolation of stock ADVs are additional assumptions. Baseline historical count and value shares are imposed, not random. The IR band is pointwise and the capacity interval comes from per-path threshold crossings. These are conditional ranges, not simultaneous bands or performance guarantees. The centre equals mean simulated IR because alpha-decay and TC are fixed. Ranges need not collapse at USD 0.5bn or current AUM: gross alpha is fixed, but sampled impact costs vary.
+Alpha-decay, congestion percentages, TC, tracking error and fitted cost parameters stay fixed across draws. Difficult trades may carry more or less alpha in reality. Ranges exclude that dependence, parameter uncertainty, clustered orders and changing liquidity. Conditional uniform selection, constant tickets within each bucket and interpolation of stock ADVs are additional assumptions. Baseline historical count and value shares are imposed, not random. The IR band is pointwise and the capacity interval comes from per-path threshold crossings. These are conditional ranges, not simultaneous bands or performance guarantees. The centre uses zero expected Gaussian shock; its finite-simulation mean can differ slightly. Ranges need not collapse at USD 0.5bn or current AUM: gross alpha is fixed, but sampled impact costs vary.
 
 The Fundamental Law of Active Management motivates separating skill, independent breadth and implementation efficiency. The dashboard does not estimate skill or breadth, and its TC scenario is not an estimated forecast-to-position correlation.
 
@@ -176,3 +176,10 @@ Model Calibration → **d) Backtest uncertainty** provides two saved controls: I
 Each full path is `IR_j(A)=mu(A)+Z_j*sigma(A)`, with one standard-normal shock reused across all AUMs. Errors are perfectly correlated across AUM by assumption, and Gaussian at each point. The exact pointwise P20–P80 band is `mu ± 0.8416*sigma`; it describes the central 60%, not a simultaneous band. Inputs are assumed backtest estimation uncertainty, not fitted standard errors. Repeated backtests or a block bootstrap of return histories could later estimate them.
 
 Each path's first minimum-IR crossing gives a capacity observation. The solver checks turning points because sufficiently optimistic paths can flatten or rise at high AUM. Already-below paths return $0.5bn; unreached paths are right-censored at the selected backtest horizon and retained in capacity P20/P50/P80. The backtest horizon is independent of the empirical retention boundary. Sample count and seed are shared with the ADV controls, but a separate random stream makes the approaches independent. Summary includes both ranges, scenario bands and an overlaid histogram; the backtest tab exports the curve and every capacity draw. Deterministic mode hides result bands and intervals.
+
+
+## Final empirical IR uncertainty
+
+After all three pillars, each path adds `Z_j * empirical_sd * (A/current_AUM)**empirical_expansion`, where Z is standard normal and independent of its sampled trading book. Defaults are 0.03 IR deviation and expansion rate 1. One shock is reused across every AUM on the path, giving perfectly correlated residual errors across AUM. These are assumed residual model uncertainties, not fitted standard errors. Setting deviation to zero restores stock-selection-only uncertainty. The combined distribution is a mixture over cost books, not necessarily Gaussian.
+
+Set both saved controls in Capacity Lab → Empirical IR curve — advanced parameters or Empirical IR curve → Final empirical IR uncertainty. The central curve and current net-alpha/IR anchor are unchanged. P20–P80 IR bands use combined path quantiles. Capacity P20/P50/P80 come from each full path's first crossing of minimum IR, not inversion of pointwise bands. Search a shared 1,025-point grid plus calibration knots, refine intervening local minima, then bisect the earliest crossing. This numerical search handles crossing followed by recovery. Unreached paths remain right-censored and included in capacity percentiles. CSV exports preserve both settings and all draws.

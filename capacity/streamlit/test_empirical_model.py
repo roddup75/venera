@@ -106,3 +106,43 @@ class EmpiricalModelTests(unittest.TestCase):
         interval=model.capacity_interval(model.capacity_samples(.4,6))
         self.assertEqual(interval['P20'],interval['P80'])
         self.assertAlmostEqual(interval['P50'],model.capacity(.4,6),places=10)
+
+    def test_final_gaussian_ir_uncertainty_is_paired_reproducible_and_independent(self):
+        base=self.model(samples=100)
+        model=self.model(samples=100,ir_deviation=.03,uncertainty_expansion=1.5)
+        aums=np.array([.5,3.4,6.])
+        noise=model.simulated_curves(aums)-base.simulated_curves(aums)
+        np.testing.assert_allclose(model.ir_standard_deviation([3.4,6.8]),[.03,.03*2**1.5])
+        np.testing.assert_allclose(noise/model.ir_standard_deviation(aums),np.broadcast_to(model._ir_shocks()[:,None],noise.shape),atol=1e-12)
+        np.testing.assert_array_equal(model.simulated_curves(aums),self.model(samples=100,ir_deviation=.03,uncertainty_expansion=1.5).simulated_curves(aums))
+        np.testing.assert_array_equal(base._impact_coefficients(),model._impact_coefficients())
+        for a in aums:self.assertEqual(base.metric(a),model.metric(a))
+        frame=model.curve(6)
+        low,high=np.quantile(model.simulated_curves(frame.AUM),[.2,.8],axis=0)
+        np.testing.assert_allclose(frame['Net IR P20'],low)
+        np.testing.assert_allclose(frame['Net alpha P80 (%)'],high*model.p.tracking_error)
+        for kwargs in ({'ir_deviation':-1},{'uncertainty_expansion':4},{'ir_deviation':np.nan}):
+            with self.assertRaises(ValueError):self.model(**kwargs)
+
+    def test_combined_capacity_quantiles_solve_each_path(self):
+        model=self.model(samples=100,ir_deviation=.2,uncertainty_expansion=3)
+        draws=model.capacity_samples(.2,6)
+        crossing=draws['AUM at minimum IR (USD bn)'].to_numpy()
+        interior=np.isfinite(crossing)&(crossing>.5)
+        np.testing.assert_allclose(model._paired_ir(crossing[interior],model._impact_coefficients()[interior],model._ir_shocks()[interior]),.2,atol=1e-11)
+        grid=np.linspace(.5,6,10001)
+        below=(model.simulated_curves(grid)<=.2).any(axis=1)
+        np.testing.assert_array_equal(draws['Threshold reached'],below)
+        expected=np.quantile(np.where(np.isfinite(crossing),crossing,np.inf),[.2,.5,.8],method='inverted_cdf')
+        result=model.capacity_interval(draws)
+        for key,value in zip(['P20','P50','P80'],expected):
+            self.assertEqual(result[key],float(value) if np.isfinite(value) else None)
+
+    def test_hidden_crossing_followed_by_recovery_is_detected(self):
+        model=self.model(samples=10,turnover=0,ir_deviation=.1)
+        centre=2.345678
+        model._gross_ir=lambda a:(np.asarray(a)-centre)**2-1e-10
+        model._final_ir_shocks=np.zeros(10)
+        draws=model.capacity_samples(0,6)
+        self.assertTrue(draws['Threshold reached'].all())
+        np.testing.assert_allclose(draws['AUM at minimum IR (USD bn)'],centre-1e-5,atol=1e-9)

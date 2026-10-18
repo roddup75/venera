@@ -21,7 +21,7 @@
 {\LARGE\bfseries Capacity Lab\par}
 {\large Objectives, Approaches and Calibration\par}
 {\small Rodrigo Dupleich and Onder Gundol\par}
-16 October 2026
+18 October 2026
 \end{center}
 
 \section{Objective of the exercise}
@@ -149,7 +149,7 @@ At current AUM, gross alpha equals $G_{current}$ in every simulation. For exampl
 
 Capacity is the first AUM from USD 0.5bn where the central curve reaches the selected threshold. A threshold not reached within the displayed range does not imply unlimited capacity. Projections beyond calibration points are labelled extrapolation. The combined domain stops when either retained-alpha factor first reaches zero, or at an earlier pillar-domain limit.
 
-The default is \textbf{Monte Carlo}: simulate 2,000 complete IR curves and show their pointwise 20th--80th percentile band. \textbf{Deterministic} remains available without intervals. Only stock selection (or CSV order resampling) varies; alpha-decay and TC relationships stay fixed.
+The default is \textbf{Monte Carlo}: simulate 2,000 complete IR curves and show their pointwise 20th--80th percentile band. \textbf{Deterministic} remains available without intervals. Stock selection (or CSV order resampling) and an independent final-IR Gaussian shock vary; alpha-decay and TC relationships stay fixed.
 
 \textbf{Capacity is the objective.} Solve the first AUM at minimum IR for each simulated curve. Summary reports the 20th, 50th and 80th percentiles of these crossings, their distribution and the share reaching the threshold within the horizon. P20--P80 is the central 60\% of conditional capacity outcomes, not the crossing of the pointwise IR band.
 
@@ -159,7 +159,7 @@ If a simulation does not cross before the chosen horizon or model-domain limit, 
 \appendix
 \section{Simulation assumptions and calculation notes}
 \subsection{What Monte Carlo samples}
-A sample is an alternative annual trading book, not a draw of individual trade alpha. Only stock selection varies; alpha-decay and TC calibrations stay fixed. The diagram follows one complete simulation to its capacity crossing.
+A sample is an alternative annual trading book, not a draw of individual trade alpha. Stock selection and an optional final-IR Gaussian shock vary; alpha-decay and TC calibrations stay fixed. The diagram follows one complete simulation to its capacity crossing.
 
 \begin{center}
 \begin{tikzpicture}[
@@ -187,7 +187,7 @@ Evaluate both calibrated curves at each AUM.\\
 No extra random alpha, congestion or TC draws are added.};
 \coordinate (mid) at ($(cost.south)!0.5!(alpha.south)$);
 \node[wide,below=9mm of mid] (combine) {\textbf{3. Combine the three pillars for this simulation}\\
-Current gross alpha $\times$ normalised pillar retention $-$ sampled full costs; divide by tracking error.};
+Combine pillars into net IR, then add the independent Gaussian final-IR shock.};
 \node[wide,below=7mm of combine] (repeat) {\textbf{4. Repeat $M$ times and estimate capacity uncertainty}\\
 For each complete curve, solve AUM at minimum IR.\\
 Repeat $M=2{,}000$ times; report capacity P20, median and P80.\\
@@ -201,7 +201,7 @@ Also show the pointwise P20--P80 IR band. Seed 2026; $N$ orders per book.};
 \draw[flow] (combine) -- (repeat);
 \end{tikzpicture}
 \end{center}
-{\small\textbf{Figure 1. Sampling workflow.} Reuse the same sampled book at every AUM. Gross alpha at current AUM is fixed; net IR varies through sampled impact costs. Each full IR path is nonincreasing as costs rise and calibrated retention falls. The central curve uses calibrated congestion and mean simulated impact.}
+{\small\textbf{Figure 1. Sampling workflow.} Reuse the same sampled book at every AUM. Gross alpha at current AUM is fixed; net IR varies through sampled impact costs. Before the final shock, IR falls as costs rise and retention declines. The Gaussian shock can cause recoveries. The central curve retains zero expected final shock.}
 
 \textbf{What is random?} Within each historical bucket, stock counts follow a multinomial distribution with fixed $n_b$ and equal probabilities over its compatible stocks. Baseline bucket counts and notional shares are fixed; participation within buckets and future migration vary. Multinomial sampling is a standard count model~\cite{agresti}; CSV resampling is the empirical bootstrap~\cite{efron}. The seed makes draws reproducible.
 
@@ -232,11 +232,22 @@ For every simulated path, solve the first crossing of minimum IR, starting at US
 
 Use the shared sample count and seed with a separate random stream from liquidity sampling. The backtest search uses the selected chart horizon independently of the empirical retention boundary. Summary compares both capacity ranges and histograms. Deterministic mode hides result bands and capacity intervals. Repeated backtests or a return-series block bootstrap could later supply evidence for these uncertainty inputs.
 
+\subsection{Final empirical IR uncertainty and capacity quantiles}
+After applying all three pillars, add an independent Gaussian term:
+\[
+IR_j(A)=IR_{pillars,j}(A)+Z_j s_E(A/A_0)^{k_E},\quad Z_j\sim N(0,1).
+\]
+Here $A_0$ is current AUM; $s_E$ is IR deviation there and $k_E$ controls expansion. Defaults are 0.03 IR and 1. Set deviation to zero for stock-selection uncertainty alone. Controls are in the empirical sidebar menu and Empirical IR curve tab; they save with the strategy.
+
+Pair each sampled cost book with one independent shock, reused across AUM. The combined distribution includes both sources and need not be Gaussian. The central curve and its current-AUM anchor remain unchanged. Pointwise bands use combined simulated IR quantiles.
+
+Capacity P20, median and P80 are quantiles of full-path first crossings, not intersections of the pointwise band with the threshold. Search a shared 1,025-point AUM grid plus calibration knots, refine intervening local minima and bisect the earliest crossing. This numerical search handles paths which cross then recover; unreached paths remain censored. The Gaussian term is assumed residual model uncertainty, not evidence-based parameter standard errors.
+
 \newpage
 \subsection{Interpretation and limitations}
 For alpha-decay purposes, orders are exchangeable: the model has no trade-specific alpha forecasts or delay sensitivities. This is a count-based approximation, not an explicit allocation of equal alpha dollars to every trade. Cost aggregation remains notional-weighted; bucket-specific tickets make these weights different from count weights.
 
-The random component is stock selection only. Alpha-decay, congestion percentages, TC, tracking error and fitted cost parameters stay fixed across simulations. Difficult-to-execute trades may carry more or less alpha in reality; the ranges exclude this dependence, calibration uncertainty, clustered orders and changes in market liquidity. The universe sampler also assumes conditional uniform stock selection, constant tickets within each bucket and a percentile-derived ADV approximation. Baseline historical bucket counts and value shares are imposed rather than random. The IR band is pointwise; the capacity interval is the distribution of per-path first crossings. Both are conditional simulation ranges, not simultaneous confidence bands or guarantees of future performance. With alpha-decay and TC fixed, the centre curve uses mean simulated impact and equals mean simulated IR. There is no forced collapse of the range at USD 0.5bn or current AUM: gross alpha is fixed, while impact costs vary.
+Random components are stock selection and the independent final-IR Gaussian term. Alpha-decay, congestion percentages, TC, tracking error and fitted cost parameters stay fixed across simulations. Difficult-to-execute trades may carry more or less alpha in reality; the ranges exclude this dependence, calibration uncertainty, clustered orders and changes in market liquidity. The universe sampler also assumes conditional uniform stock selection, constant tickets within each bucket and a percentile-derived ADV approximation. Baseline historical bucket counts and value shares are imposed rather than random. The IR band is pointwise; the capacity interval is the distribution of per-path first crossings. Both are conditional simulation ranges, not simultaneous confidence bands or guarantees of future performance. The centre curve uses mean simulated impact and zero expected final shock. A finite simulation mean may differ slightly. There is no forced collapse of the range at USD 0.5bn or current AUM: gross alpha is fixed, while impact costs vary.
 
 The Fundamental Law of Active Management motivates separating forecast skill, independent breadth and implementation efficiency. This dashboard does not estimate skill or independent breadth, and its TC scenario is not an estimated forecast-to-position correlation~\cite{grinold,clarke}.
 

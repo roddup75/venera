@@ -25,7 +25,7 @@ Python 3.11+; open http://localhost:8501.
 
 ## Gross-alpha anchor and costs
 
-Let `R(A)` be alpha-decay retention times TC-alpha retention. Gross alpha at AUM A is `gross_alpha_current * R(A) / R(current_AUM)`. Net IR is `(gross_alpha(A) - annual_impact_bp(A)/100) / tracking_error_pct`. Annual alpha and tracking error are percentage points. The initial calibration values normalise pillar shapes, not the combined performance level. USD 0.5bn is only the lower calculation boundary. Gross alpha at current AUM is fixed across simulations; net IR varies through sampled costs. Current AUM must have positive combined retention.
+Let `R(A)` be alpha-decay retention times TC-alpha retention. Gross alpha at AUM A is `gross_alpha_current * R(A) / R(current_AUM)`. Net IR is `(gross_alpha(A) - annual_impact_bp(A)/100) / tracking_error_pct`. Annual alpha and tracking error are percentage points. The initial calibration values normalise pillar shapes, not the combined performance level. USD 0.5bn is only the lower calculation boundary. Gross alpha at current AUM is fixed across simulations; net IR varies through sampled costs and final-IR uncertainty. Current AUM must have positive combined retention.
 
 The impact curve `a+b*x**gamma` is fitted to estimated historical bucket costs with equal fitting weights. Annual impact is twice one-way turnover fraction times notional-weighted impact. Full annual costs are deducted once. The optional IR breakdown measures losses from model-implied net IR at $0.5bn; baseline costs are already included in that reference.
 
@@ -39,9 +39,9 @@ Counts and turnover are annual. Monthly books preserve annual bucket/stock count
 
 ## Capacity uncertainty
 
-Monte Carlo is default; deterministic mode is optional. Set sample count (2,000) and seed (2026) in Model Calibration. Only stock selection or CSV resampling varies. Alpha-decay, TC, tracking error and fitted impact parameters stay fixed. Pointwise P20–P80 IR bands and per-path capacity percentiles are distinct outputs. Solve each complete curve's first crossing of minimum IR, then report capacity P20, median and P80: a central 60% conditional range.
+Monte Carlo is default; deterministic mode is optional. Set sample count (2,000) and seed (2026) in Model Calibration. Stock selection or CSV resampling varies, plus an independent final-IR Gaussian term when enabled. Alpha-decay, TC, tracking error and fitted impact parameters stay fixed. Pointwise P20–P80 IR bands and per-path capacity percentiles are distinct outputs. Solve each complete curve's first crossing of minimum IR, then report capacity P20, median and P80: a central 60% conditional range.
 
-Keep unreached paths as right-censored beyond the horizon/model domain. The empirical inverse-CDF percentiles retain all draws; unknown percentiles display lower bounds. The histogram shows reached crossings only and the CSV retains every draw. Calibration, liquidity-regime and forecast uncertainty are excluded.
+Keep unreached paths as right-censored beyond the horizon/model domain. The empirical inverse-CDF percentiles retain all draws; unknown percentiles display lower bounds. The histogram shows reached crossings only and the CSV retains every draw. Specific calibration parameters and liquidity-regime uncertainty remain excluded; the final Gaussian term represents assumed residual model uncertainty.
 
 ## Persistence and checks
 
@@ -67,3 +67,8 @@ The Capacity Lab sidebar also exposes both uncertainty controls under **Backtest
 The two sets of three calibration triples are edited in **Inputs & strategy**, alongside the baseline inputs and strategy save form. Model Calibration retains the alpha-decay and transfer-coefficient charts; sidebar edits remain synchronized with the input widgets.
 
 Backtest observations and their editor start at **$0.5bn**. Legacy zero-AUM anchors migrate to $0.5bn with IR preserved on load; saving persists the change. Strategy saves also preserve manual backtest a/b/γ coefficients; changing the backtest observations refits those coefficients.
+
+
+## Final empirical IR uncertainty
+
+The empirical advanced sidebar menu and the Empirical IR curve tab expose saved `empirical_sd` (default 0.03 IR) and `empirical_expansion` (default 1). Add `Z * sd * (A/current_AUM)**rate` after all three pillars; reuse one independent standard-normal shock across each complete path, paired with its sampled cost book. The central curve is unchanged; pointwise bands and capacity quantiles include both uncertainty sources. Zero deviation restores stock-only behavior. Quantiles use each path's first threshold crossing, scanning 1,025 AUM grid points plus knots, refining local minima and bisecting roots. Non-crossing paths remain censored. UI tests use isolated temporary stores, never the user's strategy file.
