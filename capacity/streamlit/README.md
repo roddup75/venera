@@ -17,7 +17,7 @@ Python 3.11+; open http://localhost:8501.
 ## Views
 
 - **Summary:** capacity results and two tables comparing empirical and backtest approaches. The Monte Carlo histogram and crossing export are last.
-- **Empirical IR curve:** net IR and net alpha, optional P20–P80 bands, scenario table, pillar-loss breakdown and exports.
+- **Empirical IR curve:** net IR and net alpha, optional P10–P90 bands, scenario table, pillar-loss breakdown and exports.
 - **Backtest IR curve:** independent fit to historical AUM/IR observations; replace illustrative defaults with actual backtests.
 - **Model Calibration:** ADV sampler and alpha-decay/TC calibration charts. Edit the triples in Inputs & strategy. All three pillars feed the same combined curve immediately; there are no separate capacity-model options.
 - **Inputs & strategy:** universe ADV percentiles, universe size, annual parent-order count, historical impact buckets or actual `q,adv` CSV. Save current inputs and parameters here.
@@ -39,7 +39,7 @@ Counts and turnover are annual. Monthly books preserve annual bucket/stock count
 
 ## Capacity uncertainty
 
-Monte Carlo is default; deterministic mode is optional. Set sample count (2,000) and seed (2026) in Model Calibration. Stock selection or CSV resampling varies, plus an independent final-IR Gaussian term when enabled. Alpha-decay, TC, tracking error and fitted impact parameters stay fixed. Pointwise P20–P80 IR bands and per-path capacity percentiles are distinct outputs. Solve each complete curve's first crossing of minimum IR, then report capacity P20, median and P80: a central 60% conditional range.
+Monte Carlo is default; deterministic mode is optional. Set sample count (2,000) and seed (2026) in Model Calibration. Stock selection or CSV resampling varies, plus an independent final-IR Gaussian term when enabled. Alpha-decay, TC, tracking error and fitted impact parameters stay fixed. Pointwise P10–P90 IR bands and per-path capacity percentiles are distinct outputs. Solve each complete curve's first crossing of minimum IR, then report capacity P10, median and P90: a central 80% conditional range.
 
 Keep unreached paths as right-censored beyond the horizon/model domain. The empirical inverse-CDF percentiles retain all draws; unknown percentiles display lower bounds. The histogram shows reached crossings only and the CSV retains every draw. Specific calibration parameters and liquidity-regime uncertainty remain excluded; the final Gaussian term represents assumed residual model uncertainty.
 
@@ -58,7 +58,7 @@ See [METHODOLOGY.md](METHODOLOGY.md) for details and academic references.
 
 Model Calibration → d) Backtest uncertainty sets `backtest_sd` (default 0.03 IR at current AUM) and `backtest_expansion` (default 1). Deviation scales as `(AUM/current_AUM)**rate`. Saved strategies preserve both; older strategies receive defaults. The fitted backtest curve stays central. Full paths use one Gaussian shock across all AUMs, so errors are perfectly correlated and pointwise bands widen with AUM. These are assumed estimation-uncertainty inputs, not standard errors fitted from the observations.
 
-Monte Carlo mode shows exact Gaussian P20–P80 IR bands, simulated first-crossing capacity percentiles and CSV exports. Unreached paths remain censored beyond the independent backtest chart horizon. Summary compares both approaches and overlays their capacity histograms. Deterministic mode hides result bands/intervals. Use the ADV sample count and seed, with a separate backtest random stream. `test_backtest_uncertainty.py` checks Gaussian calibration, full-path coherence, crossings including turning points and censoring.
+Monte Carlo mode shows exact Gaussian P10–P90 IR bands, simulated first-crossing capacity percentiles and CSV exports. Unreached paths remain censored beyond the independent backtest chart horizon. Summary compares both approaches and overlays their capacity histograms. Deterministic mode hides result bands/intervals. Use the ADV sample count and seed, with a separate backtest random stream. `test_backtest_uncertainty.py` checks Gaussian calibration, full-path coherence, crossings including turning points and censoring.
 
 The Capacity Lab sidebar also exposes both uncertainty controls under **Backtest IR curve — advanced parameters**, alongside the fitted-curve coefficients. Sidebar and calibration-tab edits stay synchronized and save as the same strategy settings.
 

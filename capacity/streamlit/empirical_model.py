@@ -225,7 +225,7 @@ class EmpiricalIRModel:
             raise ValueError('Capacity samples cannot be empty.')
         ordered=np.sort(draws['AUM at minimum IR (USD bn)'].fillna(np.inf).to_numpy(float))
         result={}
-        for name,q in [('P20',.2),('P50',.5),('P80',.8)]:
+        for name,q in [('P10',.1),('P50',.5),('P90',.9)]:
             value=ordered[max(0,int(np.ceil(q*len(ordered)))-1)]
             result[name]=float(value) if np.isfinite(value) else None
         result['Threshold reached (%)']=100*float(draws['Threshold reached'].mean())
@@ -238,8 +238,8 @@ class EmpiricalIRModel:
         grid=np.unique(np.r_[np.linspace(.5,maximum,121),points[(points>=.5)&(points<=maximum)]])
         frame=pd.DataFrame([self.metric(float(a)) for a in grid])
         if uncertainty and self.mode=='Monte Carlo':
-            low,high=np.quantile(self.simulated_curves(grid),[.2,.8],axis=0)
-            frame['Net IR P20']=low;frame['Net IR P80']=high
-            frame['Net alpha P20 (%)']=low*self.p.tracking_error
-            frame['Net alpha P80 (%)']=high*self.p.tracking_error
+            low,high=np.quantile(self.simulated_curves(grid),[.1,.9],axis=0)
+            frame['Net IR P10']=low;frame['Net IR P90']=high
+            frame['Net alpha P10 (%)']=low*self.p.tracking_error
+            frame['Net alpha P90 (%)']=high*self.p.tracking_error
         return frame

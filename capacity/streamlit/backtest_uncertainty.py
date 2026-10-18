@@ -43,10 +43,10 @@ class BacktestUncertainty:
     def curve(self,aums):
         aums=np.atleast_1d(self._aums(aums))
         mean=self.mean(aums);sd=self.deviation(aums)
-        width=NormalDist().inv_cdf(.8)*sd
+        width=NormalDist().inv_cdf(.9)*sd
         return pd.DataFrame({'AUM (USD bn)':aums,'Backtest net IR':mean,
                              'Backtest IR standard deviation':sd,
-                             'Backtest net IR P20':mean-width,'Backtest net IR P80':mean+width})
+                             'Backtest net IR P10':mean-width,'Backtest net IR P90':mean+width})
 
     def simulated_curves(self,aums):
         aums=np.atleast_1d(self._aums(aums))

@@ -27,7 +27,7 @@
 \section{Objective of the exercise}
 Estimate how a strategy's net performance changes as assets under management (AUM) grow, and identify the AUM at which its net information ratio (IR) reaches a chosen minimum. The exercise supports capacity planning: it explains the assumptions behind an indicated capacity, rather than treating capacity as a single fixed property of the strategy.
 
-The main output is a \textbf{20th--80th percentile interval for AUM at the selected minimum net IR}, obtained from simulated trading books. The dashboard also reports net IR, annual net alpha, the central capacity estimate and the zero-IR threshold. IR is net alpha divided by tracking error. Use the same return horizon and risk conventions when comparing results.
+The main output is a \textbf{10th--90th percentile interval for AUM at the selected minimum net IR}, obtained from simulated trading books. The dashboard also reports net IR, annual net alpha, the central capacity estimate and the zero-IR threshold. IR is net alpha divided by tracking error. Use the same return horizon and risk conventions when comparing results.
 
 \textbf{Current AUM is the strategy anchor.} The editable baseline gross alpha is annual alpha at current AUM, before estimated impact costs. Current AUM also anchors historical trading observations. USD 0.5bn is only the lower calculation boundary; its net IR is implied by the model, not fixed at 0.60.
 
@@ -149,9 +149,9 @@ At current AUM, gross alpha equals $G_{current}$ in every simulation. For exampl
 
 Capacity is the first AUM from USD 0.5bn where the central curve reaches the selected threshold. A threshold not reached within the displayed range does not imply unlimited capacity. Projections beyond calibration points are labelled extrapolation. The combined domain stops when either retained-alpha factor first reaches zero, or at an earlier pillar-domain limit.
 
-The default is \textbf{Monte Carlo}: simulate 2,000 complete IR curves and show their pointwise 20th--80th percentile band. \textbf{Deterministic} remains available without intervals. Stock selection (or CSV order resampling) and an independent final-IR Gaussian shock vary; alpha-decay and TC relationships stay fixed.
+The default is \textbf{Monte Carlo}: simulate 2,000 complete IR curves and show their pointwise 10th--90th percentile band. \textbf{Deterministic} remains available without intervals. Stock selection (or CSV order resampling) and an independent final-IR Gaussian shock vary; alpha-decay and TC relationships stay fixed.
 
-\textbf{Capacity is the objective.} Solve the first AUM at minimum IR for each simulated curve. Summary reports the 20th, 50th and 80th percentiles of these crossings, their distribution and the share reaching the threshold within the horizon. P20--P80 is the central 60\% of conditional capacity outcomes, not the crossing of the pointwise IR band.
+\textbf{Capacity is the objective.} Solve the first AUM at minimum IR for each simulated curve. Summary reports the 10th, 50th and 90th percentiles of these crossings, their distribution and the share reaching the threshold within the horizon. P10--P90 is the central 80\% of conditional capacity outcomes, not the crossing of the pointwise IR band.
 
 If a simulation does not cross before the chosen horizon or model-domain limit, its capacity is recorded as beyond that limit. Keep these outcomes in the percentile calculation; do not drop them or assume they cross at the limit. A percentile beyond the limit is displayed as a lower bound. Tables display at most two decimals; calculations and CSV exports preserve full precision.
 
@@ -190,8 +190,8 @@ No extra random alpha, congestion or TC draws are added.};
 Combine pillars into net IR, then add the independent Gaussian final-IR shock.};
 \node[wide,below=7mm of combine] (repeat) {\textbf{4. Repeat $M$ times and estimate capacity uncertainty}\\
 For each complete curve, solve AUM at minimum IR.\\
-Repeat $M=2{,}000$ times; report capacity P20, median and P80.\\
-Also show the pointwise P20--P80 IR band. Seed 2026; $N$ orders per book.};
+Repeat $M=2{,}000$ times; report capacity P10, median and P90.\\
+Also show the pointwise P10--P90 IR band. Seed 2026; $N$ orders per book.};
 \draw[flow] (setup.south) -- ++(0,-3mm) -| (book.north);
 \draw[flow] (setup.south) -- ++(0,-3mm) -| (congestion.north);
 \draw[flow] (book) -- (cost);
@@ -226,9 +226,9 @@ Expansion rate & SD at current AUM & SD at $2A_0$ & SD at $3A_0$ \\
 \end{tabular}
 \end{center}
 
-The pointwise P20--P80 band is $\mu(A)\pm0.8416\sigma(A)$, the central 60\% of each Gaussian marginal. Draw one shock per complete path and reuse it across AUM, so path errors are perfectly correlated. This avoids independent point noise; it is an explicit modelling assumption, not an estimated correlation structure.
+The pointwise P10--P90 band is $\mu(A)\pm1.2816\sigma(A)$, the central 80\% of each Gaussian marginal. Draw one shock per complete path and reuse it across AUM, so path errors are perfectly correlated. This avoids independent point noise; it is an explicit modelling assumption, not an estimated correlation structure.
 
-For every simulated path, solve the first crossing of minimum IR, starting at USD 0.5bn. Large expansion can make optimistic paths turn upward: the search checks the path minimum as well as its endpoint. Paths already below the threshold start at USD 0.5bn; unreached paths remain right-censored beyond the backtest horizon. Retain them when calculating capacity P20, median and P80.
+For every simulated path, solve the first crossing of minimum IR, starting at USD 0.5bn. Large expansion can make optimistic paths turn upward: the search checks the path minimum as well as its endpoint. Paths already below the threshold start at USD 0.5bn; unreached paths remain right-censored beyond the backtest horizon. Retain them when calculating capacity P10, median and P90.
 
 Use the shared sample count and seed with a separate random stream from liquidity sampling. The backtest search uses the selected chart horizon independently of the empirical retention boundary. Summary compares both capacity ranges and histograms. Deterministic mode hides result bands and capacity intervals. Repeated backtests or a return-series block bootstrap could later supply evidence for these uncertainty inputs.
 
@@ -241,7 +241,7 @@ Here $A_0$ is current AUM; $s_E$ is IR deviation there and $k_E$ controls expans
 
 Pair each sampled cost book with one independent shock, reused across AUM. The combined distribution includes both sources and need not be Gaussian. The central curve and its current-AUM anchor remain unchanged. Pointwise bands use combined simulated IR quantiles.
 
-Capacity P20, median and P80 are quantiles of full-path first crossings, not intersections of the pointwise band with the threshold. Search a shared 1,025-point AUM grid plus calibration knots, refine intervening local minima and bisect the earliest crossing. This numerical search handles paths which cross then recover; unreached paths remain censored. The Gaussian term is assumed residual model uncertainty, not evidence-based parameter standard errors.
+Capacity P10, median and P90 are quantiles of full-path first crossings, not intersections of the pointwise band with the threshold. Search a shared 1,025-point AUM grid plus calibration knots, refine intervening local minima and bisect the earliest crossing. This numerical search handles paths which cross then recover; unreached paths remain censored. The Gaussian term is assumed residual model uncertainty, not evidence-based parameter standard errors.
 
 \newpage
 \subsection{Interpretation and limitations}

@@ -12,7 +12,7 @@ class BacktestUncertaintyTests(unittest.TestCase):
         m=self.model(sd0=.03,expansion=1.5)
         np.testing.assert_allclose(m.deviation([3.4,6.8,10.2]),.03*np.array([1,2,3])**1.5)
         frame=m.curve([.5,3.4,6.8])
-        np.testing.assert_allclose(frame['Backtest net IR P80']-frame['Backtest net IR'],NormalDist().inv_cdf(.8)*m.deviation([.5,3.4,6.8]))
+        np.testing.assert_allclose(frame['Backtest net IR P90']-frame['Backtest net IR'],NormalDist().inv_cdf(.9)*m.deviation([.5,3.4,6.8]))
         paths=m.simulated_curves([.5,3.4,6.8])
         residual=(paths-m.mean([.5,3.4,6.8]))/m.deviation([.5,3.4,6.8])
         np.testing.assert_allclose(residual[:,0],residual[:,2],atol=1e-12)
@@ -24,7 +24,7 @@ class BacktestUncertaintyTests(unittest.TestCase):
         draws=m.capacity_samples(.4,15)
         np.testing.assert_allclose(draws['AUM at minimum IR (USD bn)'],(.6-.4)/.065)
         summary=m.capacity_interval(draws)
-        self.assertEqual(summary['P20'],summary['P80'])
+        self.assertEqual(summary['P10'],summary['P90'])
         np.testing.assert_allclose(self.model(expansion=0).deviation([.5,3.4,15]),.03)
 
     def test_first_crossings_reconcile_paths_and_censoring(self):
@@ -45,7 +45,7 @@ class BacktestUncertaintyTests(unittest.TestCase):
         self.assertTrue(recovered.any())
         self.assertTrue(draws.loc[~reached,'AUM at minimum IR (USD bn)'].isna().all())
         all_censored=self.model(sd0=0).capacity_samples(0,3.4)
-        self.assertIsNone(m.capacity_interval(all_censored)['P80'])
+        self.assertIsNone(m.capacity_interval(all_censored)['P90'])
         self.assertTrue((all_censored['Capacity lower bound (USD bn)']==3.4).all())
 
     def test_invalid_inputs(self):

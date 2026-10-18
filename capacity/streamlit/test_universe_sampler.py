@@ -67,7 +67,7 @@ class UniverseSamplerTests(unittest.TestCase):
         model=EmpiricalIRModel(Scenario(),DEFAULT_POINTS,DEFAULT_TC_POINTS,BUCKETS,
                                mode='Monte Carlo',samples=100,turnover=0)
         self.assertAlmostEqual(model.metric(3)['Net IR'],model.metric(3)['Gross alpha (%)']/1.3)
-        self.assertAlmostEqual(model.curve(6).iloc[0]['Net IR P20'],model.metric(.5)['Net IR'])
+        self.assertAlmostEqual(model.curve(6).iloc[0]['Net IR P10'],model.metric(.5)['Net IR'])
 
     def test_csv_retains_actual_pairs_and_book_size(self):
         tape=pd.DataFrame({'q':[10.,20.,30.],'adv':[100.,100.,200.]})

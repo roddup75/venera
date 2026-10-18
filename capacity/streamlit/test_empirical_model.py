@@ -45,14 +45,14 @@ class EmpiricalModelTests(unittest.TestCase):
     def test_mc_anchor_reproducibility_monotonicity_and_capacity(self):
         model=self.model(samples=500)
         frame=model.curve(6); repeated=model.curve(6)
-        np.testing.assert_array_equal(frame['Net IR P20'],repeated['Net IR P20'])
-        self.assertLess(frame.iloc[0]['Net IR P20'],frame.iloc[0]['Net IR P80'])
+        np.testing.assert_array_equal(frame['Net IR P10'],repeated['Net IR P10'])
+        self.assertLess(frame.iloc[0]['Net IR P10'],frame.iloc[0]['Net IR P90'])
         self.assertTrue((np.diff(frame['Net IR'])<=0).all())
         start_ir=model.simulated_curves([.5])[:,0]
         threshold=float(np.median(start_ir))
         partial=model.capacity_samples(threshold,6)
         np.testing.assert_array_equal(partial['AUM at minimum IR (USD bn)'].to_numpy()==.5,start_ir<=threshold)
-        self.assertLess(frame.iloc[-1]['Net IR P20'],frame.iloc[-1]['Net IR P80'])
+        self.assertLess(frame.iloc[-1]['Net IR P10'],frame.iloc[-1]['Net IR P90'])
         self.assertAlmostEqual(model.capacity(model.metric(3.45)['Net IR'],6),3.45,places=8)
         self.assertIsNotNone(model.capacity(0,model.maximum))
         self.assertIsNone(model.capacity(.1,3))
@@ -68,16 +68,16 @@ class EmpiricalModelTests(unittest.TestCase):
         self.assertTrue(draws['Threshold reached'].all())
         np.testing.assert_allclose(model._paired_ir(capacity,coefficients),.4,atol=1e-12)
         interval=model.capacity_interval(draws)
-        expected=np.quantile(capacity,[.2,.5,.8],method='inverted_cdf')
-        np.testing.assert_allclose([interval[k] for k in ('P20','P50','P80')],expected)
-        self.assertLess(interval['P20'],interval['P80'])
+        expected=np.quantile(capacity,[.1,.5,.9],method='inverted_cdf')
+        np.testing.assert_allclose([interval[k] for k in ('P10','P50','P90')],expected)
+        self.assertLess(interval['P10'],interval['P90'])
         self.assertEqual(interval['Censored simulations'],0)
         path=model.simulated_curves([.5,2,4,6])
         self.assertTrue((np.diff(path,axis=1)<=0).all())
         np.testing.assert_array_equal(path,model.simulated_curves([.5,1,2,3,4,5,6])[:,[0,2,4,6]])
         frame=model.curve(6)
-        np.testing.assert_allclose(frame['Net IR P20'],np.quantile(model.simulated_curves(frame.AUM),.2,axis=0))
-        np.testing.assert_allclose(frame['Net IR P80'],np.quantile(model.simulated_curves(frame.AUM),.8,axis=0))
+        np.testing.assert_allclose(frame['Net IR P10'],np.quantile(model.simulated_curves(frame.AUM),.1,axis=0))
+        np.testing.assert_allclose(frame['Net IR P90'],np.quantile(model.simulated_curves(frame.AUM),.9,axis=0))
         np.testing.assert_allclose(frame['Net IR'],model.simulated_curves(frame.AUM).mean(axis=0),atol=1e-12)
 
     def test_censoring_is_preserved_instead_of_dropping_non_crossings(self):
@@ -86,15 +86,15 @@ class EmpiricalModelTests(unittest.TestCase):
         horizon=float(full['AUM at minimum IR (USD bn)'].quantile(.3))
         limited=model.capacity_samples(.4,horizon)
         interval=model.capacity_interval(limited)
-        self.assertIsNotNone(interval['P20'])
+        self.assertIsNotNone(interval['P10'])
         self.assertIsNone(interval['P50'])
-        self.assertIsNone(interval['P80'])
+        self.assertIsNone(interval['P90'])
         self.assertEqual(interval['Censored simulations'],70)
         self.assertTrue(limited.loc[~limited['Threshold reached'],'AUM at minimum IR (USD bn)'].isna().all())
         self.assertTrue((limited.loc[~limited['Threshold reached'],'Capacity lower bound (USD bn)']==horizon).all())
         none=model.capacity_interval(model.capacity_samples(.1,.5))
         self.assertEqual(none['Threshold reached (%)'],0)
-        self.assertIsNone(none['P20'])
+        self.assertIsNone(none['P10'])
         np.testing.assert_allclose(model.capacity_samples(100.,6)['AUM at minimum IR (USD bn)'],.5)
         with self.assertRaises(ValueError):model.capacity_samples(.4,.1)
         with self.assertRaises(ValueError):self.model(mode='Deterministic').capacity_samples(.4,6)
@@ -104,7 +104,7 @@ class EmpiricalModelTests(unittest.TestCase):
         paths=model.simulated_curves([.5,3,6])
         np.testing.assert_allclose(paths,np.broadcast_to(paths[0],paths.shape))
         interval=model.capacity_interval(model.capacity_samples(.4,6))
-        self.assertEqual(interval['P20'],interval['P80'])
+        self.assertEqual(interval['P10'],interval['P90'])
         self.assertAlmostEqual(interval['P50'],model.capacity(.4,6),places=10)
 
     def test_final_gaussian_ir_uncertainty_is_paired_reproducible_and_independent(self):
@@ -118,9 +118,9 @@ class EmpiricalModelTests(unittest.TestCase):
         np.testing.assert_array_equal(base._impact_coefficients(),model._impact_coefficients())
         for a in aums:self.assertEqual(base.metric(a),model.metric(a))
         frame=model.curve(6)
-        low,high=np.quantile(model.simulated_curves(frame.AUM),[.2,.8],axis=0)
-        np.testing.assert_allclose(frame['Net IR P20'],low)
-        np.testing.assert_allclose(frame['Net alpha P80 (%)'],high*model.p.tracking_error)
+        low,high=np.quantile(model.simulated_curves(frame.AUM),[.1,.9],axis=0)
+        np.testing.assert_allclose(frame['Net IR P10'],low)
+        np.testing.assert_allclose(frame['Net alpha P90 (%)'],high*model.p.tracking_error)
         for kwargs in ({'ir_deviation':-1},{'uncertainty_expansion':4},{'ir_deviation':np.nan}):
             with self.assertRaises(ValueError):self.model(**kwargs)
 
@@ -133,9 +133,9 @@ class EmpiricalModelTests(unittest.TestCase):
         grid=np.linspace(.5,6,10001)
         below=(model.simulated_curves(grid)<=.2).any(axis=1)
         np.testing.assert_array_equal(draws['Threshold reached'],below)
-        expected=np.quantile(np.where(np.isfinite(crossing),crossing,np.inf),[.2,.5,.8],method='inverted_cdf')
+        expected=np.quantile(np.where(np.isfinite(crossing),crossing,np.inf),[.1,.5,.9],method='inverted_cdf')
         result=model.capacity_interval(draws)
-        for key,value in zip(['P20','P50','P80'],expected):
+        for key,value in zip(['P10','P50','P90'],expected):
             self.assertEqual(result[key],float(value) if np.isfinite(value) else None)
 
     def test_hidden_crossing_followed_by_recovery_is_detected(self):
